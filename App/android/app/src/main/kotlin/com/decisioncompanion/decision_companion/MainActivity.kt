@@ -1,0 +1,5 @@
+package com.decisioncompanion.decision_companion
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity: FlutterActivity()

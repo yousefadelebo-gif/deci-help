@@ -1,0 +1,17 @@
+# Decision Companion - Django Backend Requirements
+
+# Core Django
+Django>=5.0,<6.0
+
+# Django REST Framework
+djangorestframework>=3.14.0
+djangorestframework-simplejwt>=5.3.0
+
+# CORS support for Flutter app
+django-cors-headers>=4.3.0
+
+# Database
+psycopg2-binary>=2.9.9  # PostgreSQL adapter (optional, for production)
+
+# Utilities
+python-dotenv>=1.0.0  # Environment variables

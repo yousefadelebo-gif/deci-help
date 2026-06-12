@@ -1,0 +1,1024 @@
+{
+  "info": {
+    "name": "Decision Companion API",
+    "description": "API Collection for Decision Companion - AI Decision Making System",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "decisionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "optionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "factorId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set('accessToken', jsonData.data.access_token);",
+                  "    pm.collectionVariables.set('refreshToken', jsonData.data.refresh_token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"SecurePassword123!\",\n    \"password_confirm\": \"SecurePassword123!\",\n    \"name\": \"John Doe\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set('accessToken', jsonData.data.access_token);",
+                  "    pm.collectionVariables.set('refreshToken', jsonData.data.refresh_token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"SecurePassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Guest Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set('accessToken', jsonData.data.access_token);",
+                  "    pm.collectionVariables.set('refreshToken', jsonData.data.refresh_token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/guest",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "guest"]
+            }
+          }
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"refresh_token\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set('accessToken', jsonData.access);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"refresh\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/token/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "token", "refresh"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "User Profile",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "me"]
+            }
+          }
+        },
+        {
+          "name": "Update My Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"John Updated\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "me"]
+            }
+          }
+        },
+        {
+          "name": "Get My Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/me/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "me", "stats"]
+            }
+          }
+        },
+        {
+          "name": "Get My Settings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/me/settings",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "me", "settings"]
+            }
+          }
+        },
+        {
+          "name": "Update My Settings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"theme\": \"dark\",\n    \"language\": \"en\",\n    \"notifications_enabled\": true,\n    \"email_notifications\": true,\n    \"push_notifications\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/me/settings",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "me", "settings"]
+            }
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"old_password\": \"SecurePassword123!\",\n    \"new_password\": \"NewSecurePassword456!\",\n    \"new_password_confirm\": \"NewSecurePassword456!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/me/change-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "me", "change-password"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Decisions",
+      "item": [
+        {
+          "name": "List Decisions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/decisions",
+              "host": ["{{baseUrl}}"],
+              "path": ["decisions"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "DRAFT",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Decision",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set('decisionId', jsonData.data.id);",
+                  "    if (jsonData.data.options && jsonData.data.options.length > 0) {",
+                  "        pm.collectionVariables.set('optionId', jsonData.data.options[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"Which laptop to buy?\",\n    \"description\": \"I need to decide between MacBook Pro and Dell XPS\",\n    \"options\": [\n        {\n            \"name\": \"MacBook Pro M3\",\n            \"description\": \"Apple's latest laptop with M3 chip\"\n        },\n        {\n            \"name\": \"Dell XPS 15\",\n            \"description\": \"High-end Windows laptop\"\n        },\n        {\n            \"name\": \"ThinkPad X1 Carbon\",\n            \"description\": \"Business-focused laptop\"\n        }\n    ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/decisions",
+              "host": ["{{baseUrl}}"],
+              "path": ["decisions"]
+            }
+          }
+        },
+        {
+          "name": "Get Decision",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/decisions/{{decisionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["decisions", "{{decisionId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Decision",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"Which laptop to buy? (Updated)\",\n    \"description\": \"Updated description\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/decisions/{{decisionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["decisions", "{{decisionId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Decision",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/decisions/{{decisionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["decisions", "{{decisionId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Decision Options",
+      "item": [
+        {
+          "name": "List Options",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/decisions/{{decisionId}}/options",
+              "host": ["{{baseUrl}}"],
+              "path": ["decisions", "{{decisionId}}", "options"]
+            }
+          }
+        },
+        {
+          "name": "Create Option",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set('optionId', jsonData.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"New Option\",\n    \"description\": \"A new option for the decision\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/decisions/{{decisionId}}/options",
+              "host": ["{{baseUrl}}"],
+              "path": ["decisions", "{{decisionId}}", "options"]
+            }
+          }
+        },
+        {
+          "name": "Update Option",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Updated Option Name\",\n    \"description\": \"Updated description\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/decisions/{{decisionId}}/options/{{optionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["decisions", "{{decisionId}}", "options", "{{optionId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Option",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/decisions/{{decisionId}}/options/{{optionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["decisions", "{{decisionId}}", "options", "{{optionId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Factors",
+      "item": [
+        {
+          "name": "List Factors",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/decisions/{{decisionId}}/factors",
+              "host": ["{{baseUrl}}"],
+              "path": ["decisions", "{{decisionId}}", "factors"]
+            }
+          }
+        },
+        {
+          "name": "Create Factor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set('factorId', jsonData.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Price\",\n    \"description\": \"The cost of the option\",\n    \"category\": \"CON\",\n    \"weight\": 8\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/decisions/{{decisionId}}/factors",
+              "host": ["{{baseUrl}}"],
+              "path": ["decisions", "{{decisionId}}", "factors"]
+            }
+          }
+        },
+        {
+          "name": "Create Factor from Template",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set('factorId', jsonData.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"template_key\": \"QUALITY\",\n    \"category\": \"PRO\",\n    \"weight\": 9\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/decisions/{{decisionId}}/factors/from-template",
+              "host": ["{{baseUrl}}"],
+              "path": ["decisions", "{{decisionId}}", "factors", "from-template"]
+            }
+          }
+        },
+        {
+          "name": "Update Factor",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Updated Factor Name\",\n    \"weight\": 7\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/decisions/{{decisionId}}/factors/{{factorId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["decisions", "{{decisionId}}", "factors", "{{factorId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Factor",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/decisions/{{decisionId}}/factors/{{factorId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["decisions", "{{decisionId}}", "factors", "{{factorId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Factor Scores",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"scores\": [\n        {\n            \"option_id\": \"{{optionId}}\",\n            \"score\": 8,\n            \"notes\": \"Good value for money\"\n        }\n    ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/decisions/{{decisionId}}/factors/{{factorId}}/scores",
+              "host": ["{{baseUrl}}"],
+              "path": ["decisions", "{{decisionId}}", "factors", "{{factorId}}", "scores"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "AI",
+      "item": [
+        {
+          "name": "Get AI Suggestions",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/decisions/{{decisionId}}/ai/suggestions",
+              "host": ["{{baseUrl}}"],
+              "path": ["decisions", "{{decisionId}}", "ai", "suggestions"]
+            }
+          }
+        },
+        {
+          "name": "Run AI Analysis",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/decisions/{{decisionId}}/ai/analyze",
+              "host": ["{{baseUrl}}"],
+              "path": ["decisions", "{{decisionId}}", "ai", "analyze"]
+            }
+          }
+        },
+        {
+          "name": "Get Decision Result",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/decisions/{{decisionId}}/result",
+              "host": ["{{baseUrl}}"],
+              "path": ["decisions", "{{decisionId}}", "result"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Journal",
+      "item": [
+        {
+          "name": "List Journal Entries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/journal",
+              "host": ["{{baseUrl}}"],
+              "path": ["journal"]
+            }
+          }
+        },
+        {
+          "name": "Update Journal Entry",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"satisfaction_rating\": 4,\n    \"reflection_notes\": \"I'm happy with this decision. The MacBook Pro was the right choice.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/decisions/{{decisionId}}/journal",
+              "host": ["{{baseUrl}}"],
+              "path": ["decisions", "{{decisionId}}", "journal"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Feedback",
+      "item": [
+        {
+          "name": "Submit Feedback",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"feedback_type\": \"GENERAL\",\n    \"rating\": 5,\n    \"title\": \"Great app!\",\n    \"message\": \"This app has helped me make better decisions.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/feedback",
+              "host": ["{{baseUrl}}"],
+              "path": ["feedback"]
+            }
+          }
+        },
+        {
+          "name": "Get My Feedback",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/feedback/my",
+              "host": ["{{baseUrl}}"],
+              "path": ["feedback", "my"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Factor Templates (Public)",
+      "item": [
+        {
+          "name": "List Factor Templates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/factor-templates",
+              "host": ["{{baseUrl}}"],
+              "path": ["factor-templates"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Users",
+          "item": [
+            {
+              "name": "List All Users",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/users",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["admin", "users"],
+                  "query": [
+                    {
+                      "key": "role",
+                      "value": "USER",
+                      "disabled": true
+                    },
+                    {
+                      "key": "is_guest",
+                      "value": "false",
+                      "disabled": true
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get User Details",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/users/{{userId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["admin", "users", "{{userId}}"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Analytics",
+          "item": [
+            {
+              "name": "Get Usage Analytics",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/analytics/usage",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["admin", "analytics", "usage"]
+                }
+              }
+            },
+            {
+              "name": "Get Feedback Analytics",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/analytics/feedback",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["admin", "analytics", "feedback"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Factor Templates",
+          "item": [
+            {
+              "name": "List Factor Templates",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/factor-templates",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["admin", "factor-templates"]
+                }
+              }
+            },
+            {
+              "name": "Create Factor Template",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"key\": \"SUSTAINABILITY\",\n    \"name\": \"Sustainability\",\n    \"description\": \"Environmental and sustainability impact\",\n    \"default_category\": \"PRO\",\n    \"default_weight\": 6,\n    \"icon\": \"eco\",\n    \"sort_order\": 11\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/admin/factor-templates",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["admin", "factor-templates"]
+                }
+              }
+            },
+            {
+              "name": "Update Factor Template",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"name\": \"Updated Name\",\n    \"default_weight\": 7\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/admin/factor-templates/{{templateId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["admin", "factor-templates", "{{templateId}}"]
+                }
+              }
+            },
+            {
+              "name": "Delete Factor Template",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/factor-templates/{{templateId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["admin", "factor-templates", "{{templateId}}"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "AI Parameters",
+          "item": [
+            {
+              "name": "List AI Parameters",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/ai-parameters",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["admin", "ai-parameters"]
+                }
+              }
+            },
+            {
+              "name": "Get AI Parameter",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/ai-parameters/MIN_CONFIDENCE_THRESHOLD",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["admin", "ai-parameters", "MIN_CONFIDENCE_THRESHOLD"]
+                }
+              }
+            },
+            {
+              "name": "Update AI Parameter",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"value\": \"35\",\n    \"description\": \"Updated minimum confidence threshold\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/admin/ai-parameters/MIN_CONFIDENCE_THRESHOLD",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["admin", "ai-parameters", "MIN_CONFIDENCE_THRESHOLD"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Activity Logs",
+          "item": [
+            {
+              "name": "Get Activity Logs",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/logs",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["admin", "logs"],
+                  "query": [
+                    {
+                      "key": "action",
+                      "value": "LOGIN",
+                      "disabled": true
+                    },
+                    {
+                      "key": "user_id",
+                      "value": "{{userId}}",
+                      "disabled": true
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

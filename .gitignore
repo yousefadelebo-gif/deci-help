@@ -1,0 +1,10 @@
+backend/.env
+backend/db.sqlite3
+*.sqlite3
+__pycache__/
+.venv/
+venv/
+ngrok.exe
+*.lnk
+pdf_out_full.txt
+decision_companion/logs/
