@@ -57,6 +57,7 @@ import 'screens/admin/ai_parameters_screen.dart';
 import 'widgets/bottom_navigation.dart';
 import 'theme/app_tokens.dart';
 import 'models/models.dart';
+import 'utils/decision_mapper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -203,7 +204,13 @@ class DecisionCompanionApp extends StatelessWidget {
       // Journal
       case '/journal-detail':
         final args = settings.arguments as Map<String, dynamic>?;
-        final decision = args?['decision'] as Decision?;
+        final raw = args?['decision'];
+        Decision? decision;
+        if (raw is Decision) {
+          decision = raw;
+        } else if (raw is Map<String, dynamic>) {
+          decision = DecisionMapper.fromApiMap(raw);
+        }
         if (decision != null) {
           return _buildRoute(
             JournalDetailScreen(decision: decision),
@@ -269,12 +276,28 @@ class MainNavigationScreen extends StatefulWidget {
     this.initialIndex = 0,
   });
 
+  /// Switch bottom-nav tab from a child screen without stacking routes.
+  static void switchToTab(BuildContext context, int index) {
+    _MainNavigationScreenState.of(context)?.switchToTab(index);
+  }
+
   @override
   State<MainNavigationScreen> createState() => _MainNavigationScreenState();
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   late int _currentIndex;
+
+  static _MainNavigationScreenState? of(BuildContext context) {
+    return context.findAncestorStateOfType<_MainNavigationScreenState>();
+  }
+
+  void switchToTab(int index) {
+    if (index < 0 || index > 3) return;
+    if (_currentIndex != index) {
+      setState(() => _currentIndex = index);
+    }
+  }
 
   @override
   void initState() {

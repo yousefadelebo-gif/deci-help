@@ -2,15 +2,61 @@
 /// Data and privacy settings
 
 import 'package:flutter/material.dart';
+import '../../core/constants/app_constants.dart';
+import '../../core/services/local_storage_service.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/custom_app_bar.dart';
 import '../../widgets/app_cards.dart';
 
-class PrivacyScreen extends StatelessWidget {
+class PrivacyScreen extends StatefulWidget {
   const PrivacyScreen({super.key});
 
   @override
+  State<PrivacyScreen> createState() => _PrivacyScreenState();
+}
+
+class _PrivacyScreenState extends State<PrivacyScreen> {
+  bool _usageAnalytics = true;
+  bool _cloudBackup = true;
+  bool _biometricLogin = false;
+  bool _autoLock = false;
+  bool _isLoading = true;
+  LocalStorageService? _storage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final storage = await LocalStorageService.getInstance();
+    setState(() {
+      _storage = storage;
+      _usageAnalytics =
+          storage.getBool(AppConstants.privacyAnalyticsKey) ?? true;
+      _cloudBackup =
+          storage.getBool(AppConstants.privacyCloudBackupKey) ?? true;
+      _biometricLogin =
+          storage.getBool(AppConstants.privacyBiometricKey) ?? false;
+      _autoLock = storage.getBool(AppConstants.privacyAutoLockKey) ?? false;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _saveBool(String key, bool value) async {
+    await _storage?.setBool(key, value);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: const CustomAppBar(
@@ -22,7 +68,6 @@ class PrivacyScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Data Privacy Section
             Text(
               'Data Privacy',
               style: AppTypography.labelMedium.copyWith(
@@ -40,8 +85,11 @@ class PrivacyScreen extends StatelessWidget {
                     subtitle:
                         'Help improve the app by sharing anonymous usage data',
                     trailing: Switch(
-                      value: true,
-                      onChanged: (_) {},
+                      value: _usageAnalytics,
+                      onChanged: (value) {
+                        setState(() => _usageAnalytics = value);
+                        _saveBool(AppConstants.privacyAnalyticsKey, value);
+                      },
                       activeColor: AppColors.primary,
                     ),
                   ),
@@ -51,8 +99,11 @@ class PrivacyScreen extends StatelessWidget {
                     title: 'Cloud Backup',
                     subtitle: 'Automatically back up your decisions',
                     trailing: Switch(
-                      value: true,
-                      onChanged: (_) {},
+                      value: _cloudBackup,
+                      onChanged: (value) {
+                        setState(() => _cloudBackup = value);
+                        _saveBool(AppConstants.privacyCloudBackupKey, value);
+                      },
                       activeColor: AppColors.primary,
                     ),
                   ),
@@ -61,7 +112,6 @@ class PrivacyScreen extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.lg),
 
-            // Security Section
             Text(
               'Security',
               style: AppTypography.labelMedium.copyWith(
@@ -78,8 +128,20 @@ class PrivacyScreen extends StatelessWidget {
                     title: 'Biometric Login',
                     subtitle: 'Use fingerprint or face to unlock',
                     trailing: Switch(
-                      value: false,
-                      onChanged: (_) {},
+                      value: _biometricLogin,
+                      onChanged: (value) {
+                        setState(() => _biometricLogin = value);
+                        _saveBool(AppConstants.privacyBiometricKey, value);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              value
+                                  ? 'Biometric login enabled'
+                                  : 'Biometric login disabled',
+                            ),
+                          ),
+                        );
+                      },
                       activeColor: AppColors.primary,
                     ),
                   ),
@@ -89,8 +151,11 @@ class PrivacyScreen extends StatelessWidget {
                     title: 'Auto-Lock',
                     subtitle: 'Lock app after 5 minutes of inactivity',
                     trailing: Switch(
-                      value: false,
-                      onChanged: (_) {},
+                      value: _autoLock,
+                      onChanged: (value) {
+                        setState(() => _autoLock = value);
+                        _saveBool(AppConstants.privacyAutoLockKey, value);
+                      },
                       activeColor: AppColors.primary,
                     ),
                   ),
@@ -99,7 +164,6 @@ class PrivacyScreen extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.lg),
 
-            // Data Management
             Text(
               'Data Management',
               style: AppTypography.labelMedium.copyWith(
@@ -137,9 +201,7 @@ class PrivacyScreen extends StatelessWidget {
                       color: AppColors.textTertiary,
                     ),
                     onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Coming soon')),
-                      );
+                      Navigator.of(context).pushNamed('/settings');
                     },
                   ),
                   const Divider(height: 1, indent: 72),
@@ -171,17 +233,51 @@ class PrivacyScreen extends StatelessWidget {
                       Icons.chevron_right_rounded,
                       color: AppColors.textTertiary,
                     ),
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Coming soon')),
-                      );
-                    },
+                    onTap: () => _showClearDataDialog(),
                   ),
                 ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showClearDataDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear All Data'),
+        content: const Text(
+          'This removes locally stored preferences and cached data. Your account decisions on the server are not deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await _storage?.remove(AppConstants.privacyAnalyticsKey);
+              await _storage?.remove(AppConstants.privacyCloudBackupKey);
+              await _storage?.remove(AppConstants.privacyBiometricKey);
+              await _storage?.remove(AppConstants.privacyAutoLockKey);
+              if (!context.mounted) return;
+              Navigator.pop(context);
+              await _loadSettings();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Privacy preferences reset')),
+                );
+              }
+            },
+            child: const Text(
+              'Clear',
+              style: TextStyle(color: AppColors.error),
+            ),
+          ),
+        ],
       ),
     );
   }

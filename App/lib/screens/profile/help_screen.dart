@@ -2,14 +2,58 @@
 /// FAQ and contact support
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/custom_app_bar.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_cards.dart';
 import '../../widgets/app_text_field.dart';
+import '../../providers/feedback_provider.dart';
 
-class HelpScreen extends StatelessWidget {
+class HelpScreen extends StatefulWidget {
   const HelpScreen({super.key});
+
+  @override
+  State<HelpScreen> createState() => _HelpScreenState();
+}
+
+class _HelpScreenState extends State<HelpScreen> {
+  String _searchQuery = '';
+
+  static const _faqs = [
+    (
+      'How do I create a new decision?',
+      'Tap the "+" button on the dashboard or navigate to the "New Decision" tab. Enter a title for your decision, add at least 2 options to compare, and select the factors that matter most to you.',
+    ),
+    (
+      'How does the AI recommendation work?',
+      'Our AI analyzes your options against the factors you\'ve selected, weighted by importance. It calculates a score for each option and provides a recommendation with a confidence level.',
+    ),
+    (
+      'Can I edit a decision after analysis?',
+      'Yes. Open the decision from Journal or Past Decisions and use Edit to review the recommendation again.',
+    ),
+    (
+      'What data does the app collect?',
+      'We only collect the data you provide (decisions, options, factors). We don\'t share your personal decision data with third parties. See our Privacy Policy for details.',
+    ),
+    (
+      'How do I delete my account?',
+      'Go to Profile > My Account > Delete Account. This will permanently delete all your data including decision history.',
+    ),
+  ];
+
+  List<(String, String)> get _filteredFaqs {
+    if (_searchQuery.trim().isEmpty) return _faqs;
+    final q = _searchQuery.toLowerCase();
+    return _faqs
+        .where(
+          (item) =>
+              item.$1.toLowerCase().contains(q) ||
+              item.$2.toLowerCase().contains(q),
+        )
+        .toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,8 +68,10 @@ class HelpScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Search
-            const AppSearchField(hint: 'Search help articles...'),
+            AppSearchField(
+              hint: 'Search help articles...',
+              onChanged: (value) => setState(() => _searchQuery = value),
+            ),
             const SizedBox(height: AppSpacing.lg),
 
             // Quick Actions
@@ -64,26 +110,17 @@ class HelpScreen extends StatelessWidget {
             // FAQ Section
             const Text('Frequently Asked Questions', style: AppTypography.h3),
             const SizedBox(height: AppSpacing.md),
-            _buildFAQItem(
-              'How do I create a new decision?',
-              'Tap the "+" button on the dashboard or navigate to the "New Decision" tab. Enter a title for your decision, add at least 2 options to compare, and select the factors that matter most to you.',
-            ),
-            _buildFAQItem(
-              'How does the AI recommendation work?',
-              'Our AI analyzes your options against the factors you\'ve selected, weighted by importance. It calculates a score for each option and provides a recommendation with a confidence level.',
-            ),
-            _buildFAQItem(
-              'Can I edit a decision after analysis?',
-              'Yes! You can edit any decision from the Journal. Tap on a decision, then use the edit button to modify options, factors, or weights. Re-analyze to get updated recommendations.',
-            ),
-            _buildFAQItem(
-              'What data does the app collect?',
-              'We only collect the data you provide (decisions, options, factors). We don\'t share your personal decision data with third parties. See our Privacy Policy for details.',
-            ),
-            _buildFAQItem(
-              'How do I delete my account?',
-              'Go to Profile > My Account > Delete Account. This will permanently delete all your data including decision history.',
-            ),
+            if (_filteredFaqs.isEmpty)
+              Text(
+                'No articles match your search.',
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              )
+            else
+              ..._filteredFaqs.map(
+                (faq) => _buildFAQItem(faq.$1, faq.$2),
+              ),
             const SizedBox(height: AppSpacing.lg),
 
             // Still need help
@@ -183,61 +220,7 @@ class HelpScreen extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(AppSpacing.radiusXl),
-          ),
-        ),
-        padding: EdgeInsets.fromLTRB(
-          AppSpacing.screenPadding,
-          AppSpacing.md,
-          AppSpacing.screenPadding,
-          MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.border,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            const Text('Contact Support', style: AppTypography.h3),
-            const SizedBox(height: AppSpacing.lg),
-            const AppTextField(
-              label: 'Subject',
-              hint: 'Brief description of your issue',
-            ),
-            const SizedBox(height: AppSpacing.md),
-            const AppTextArea(
-              label: 'Message',
-              hint: 'Describe your issue in detail...',
-              maxLines: 5,
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            AppButton(
-              text: 'Send Message',
-              onPressed: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Message sent! We\'ll respond within 24 hours.'),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
+      builder: (context) => const _EmailSupportSheet(),
     );
   }
 
@@ -298,6 +281,120 @@ class HelpScreen extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _EmailSupportSheet extends StatefulWidget {
+  const _EmailSupportSheet();
+
+  @override
+  State<_EmailSupportSheet> createState() => _EmailSupportSheetState();
+}
+
+class _EmailSupportSheetState extends State<_EmailSupportSheet> {
+  final _subjectController = TextEditingController();
+  final _messageController = TextEditingController();
+  bool _isSending = false;
+
+  @override
+  void dispose() {
+    _subjectController.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final subject = _subjectController.text.trim();
+    final message = _messageController.text.trim();
+
+    if (subject.isEmpty || message.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a subject and message')),
+      );
+      return;
+    }
+
+    setState(() => _isSending = true);
+
+    final success = await context.read<FeedbackProvider>().submitFeedback(
+          category: 'support',
+          title: subject,
+          description: message,
+        );
+
+    if (!mounted) return;
+    setState(() => _isSending = false);
+
+    if (success) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Message sent! We\'ll respond within 24 hours.'),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.read<FeedbackProvider>().error ?? 'Failed to send message',
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppSpacing.radiusXl),
+        ),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.screenPadding,
+        AppSpacing.md,
+        AppSpacing.screenPadding,
+        MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          const Text('Contact Support', style: AppTypography.h3),
+          const SizedBox(height: AppSpacing.lg),
+          AppTextField(
+            controller: _subjectController,
+            label: 'Subject',
+            hint: 'Brief description of your issue',
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppTextArea(
+            controller: _messageController,
+            label: 'Message',
+            hint: 'Describe your issue in detail...',
+            maxLines: 5,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppButton(
+            text: _isSending ? 'Sending...' : 'Send Message',
+            onPressed: _isSending ? null : _send,
+          ),
+        ],
       ),
     );
   }

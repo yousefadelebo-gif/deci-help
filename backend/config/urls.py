@@ -15,13 +15,17 @@ schema_view = get_schema_view(
     openapi.Info(
         title="Decision Companion API",
         default_version='v1',
-        description="AI-Powered Decision Making API",
+        description=(
+            "AI-Powered Decision Making API. "
+            "Login via POST /api/v1/auth/login/ then click Authorize and enter: Bearer <access_token>"
+        ),
         terms_of_service="https://www.decisioncompanion.com/terms/",
         contact=openapi.Contact(email="support@decisioncompanion.com"),
         license=openapi.License(name="MIT License"),
     ),
     public=True,
     permission_classes=[permissions.AllowAny],
+    authentication_classes=[],
 )
 
 urlpatterns = [

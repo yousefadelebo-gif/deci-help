@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/app_cards.dart';
+import '../../main.dart' show MainNavigationScreen;
 import '../../providers/decision_provider.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
 
@@ -185,9 +186,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.of(context).pushNamed('/new-decision');
-        },
+        onPressed: () => MainNavigationScreen.switchToTab(context, 1),
         backgroundColor: AppColors.primary,
         foregroundColor: AppColors.textOnPrimary,
         elevation: 4,
@@ -316,9 +315,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
-      onTap: () {
-        Navigator.of(context).pushNamed('/new-decision');
-      },
+      onTap: () => MainNavigationScreen.switchToTab(context, 1),
     );
   }
 

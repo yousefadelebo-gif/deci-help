@@ -404,9 +404,21 @@ class _FactorTemplatesScreenState extends State<FactorTemplatesScreen>
           ),
           ElevatedButton(
             onPressed: () {
+              final name = nameController.text.trim();
+              if (name.isEmpty) return;
+              setState(() {
+                _categories.add(
+                  _FactorCategory(
+                    name: name,
+                    icon: selectedIcon,
+                    color: AppColors.primary,
+                    factors: [],
+                  ),
+                );
+              });
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Category added!')),
+                SnackBar(content: Text('Category "$name" added')),
               );
             },
             child: const Text('Add'),
@@ -476,9 +488,23 @@ class _FactorTemplatesScreenState extends State<FactorTemplatesScreen>
           ),
           ElevatedButton(
             onPressed: () {
+              final name = nameController.text.trim();
+              if (name.isEmpty || selectedCategory == null) return;
+              setState(() {
+                final category = _categories.firstWhere(
+                  (c) => c.name == selectedCategory,
+                );
+                category.factors.add(
+                  _FactorTemplate(
+                    name: name,
+                    icon: Icons.label_outline_rounded,
+                    usageCount: 0,
+                  ),
+                );
+              });
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Factor added!')),
+                SnackBar(content: Text('Factor "$name" added')),
               );
             },
             child: const Text('Add'),
@@ -511,9 +537,23 @@ class _FactorTemplatesScreenState extends State<FactorTemplatesScreen>
           ),
           ElevatedButton(
             onPressed: () {
+              final name = nameController.text.trim();
+              if (name.isEmpty) return;
+              setState(() {
+                for (final category in _categories) {
+                  final index = category.factors.indexOf(factor);
+                  if (index != -1) {
+                    category.factors[index] = _FactorTemplate(
+                      name: name,
+                      icon: factor.icon,
+                      usageCount: factor.usageCount,
+                    );
+                  }
+                }
+              });
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Factor updated!')),
+                const SnackBar(content: Text('Factor updated')),
               );
             },
             child: const Text('Save'),
@@ -538,6 +578,11 @@ class _FactorTemplatesScreenState extends State<FactorTemplatesScreen>
           ),
           ElevatedButton(
             onPressed: () {
+              setState(() {
+                for (final category in _categories) {
+                  category.factors.remove(factor);
+                }
+              });
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('"${factor.name}" deleted')),

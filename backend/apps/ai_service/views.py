@@ -10,11 +10,90 @@ from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
-from apps.decisions.models import Decision, DecisionOption
+from apps.decisions.models import Decision, DecisionOption, DecisionFactor, FactorRating
 from apps.decisions.serializers import DecisionDetailSerializer
 from .service import ai_service
 
 logger = logging.getLogger(__name__)
+
+
+def _compute_weighted_breakdown(decision_data, options_list, factors_list, normalized_weights):
+    ratings_by_key = {}
+    option_index_map = {idx: option for idx, option in enumerate(options_list)}
+
+    for rating in decision_data.get('ratings', []):
+        option_index = rating.get('option_index', 0)
+        factor_name = rating.get('factor_name')
+        option = option_index_map.get(option_index)
+        if option is None or factor_name is None:
+            continue
+        factor = next((f for f in factors_list if f.name == factor_name), None)
+        if factor is None:
+            continue
+        ratings_by_key[(str(factor.id), str(option.id))] = float(rating.get('score', 0))
+
+    for factor in factors_list:
+        for rating in factor.ratings.all():
+            ratings_by_key[(str(factor.id), str(rating.option_id))] = float(rating.score)
+
+    factor_breakdown = []
+    for idx, option in enumerate(options_list):
+        weighted_total = 0.0
+        per_factor = []
+        for f_idx, factor in enumerate(factors_list):
+            n_weight = normalized_weights[f_idx] if f_idx < len(normalized_weights) else 0.0
+            raw_score = ratings_by_key.get((str(factor.id), str(option.id)), 0.0)
+            normalized_score = max(0.0, min(1.0, raw_score / 10.0))
+            contribution = normalized_score * n_weight
+            weighted_total += contribution
+            per_factor.append({
+                'factor_id': str(factor.id),
+                'factor_name': factor.name,
+                'type': decision_data['factors'][f_idx]['type'] if f_idx < len(decision_data['factors']) else 'pro',
+                'normalized_weight': n_weight,
+                'raw_score': raw_score,
+                'normalized_score': normalized_score,
+                'contribution': contribution,
+            })
+        factor_breakdown.append({
+            'option_id': str(option.id),
+            'option_name': option.name,
+            'weighted_score': weighted_total,
+            'factors': per_factor,
+        })
+
+    score_rows = sorted(
+        [
+            {
+                'option_id': row['option_id'],
+                'option_name': row['option_name'],
+                'score': round(float(row['weighted_score']), 4),
+                'percentage': round(float(row['weighted_score']) * 100, 2),
+            }
+            for row in factor_breakdown
+        ],
+        key=lambda x: x['score'],
+        reverse=True,
+    )
+    return factor_breakdown, score_rows
+
+
+def _persist_generated_ratings(decision, options_list, factors_list, generated_ratings):
+    for item in generated_ratings:
+        option_index = int(item['option_index'])
+        factor_index = int(item['factor_index'])
+        if option_index >= len(options_list) or factor_index >= len(factors_list):
+            continue
+        option = options_list[option_index]
+        factor = factors_list[factor_index]
+        FactorRating.objects.update_or_create(
+            decision_factor=factor,
+            option=option,
+            defaults={
+                'score': item['score'],
+                'notes': item.get('reasoning', ''),
+            },
+        )
 
 
 class AIStatusView(APIView):
@@ -107,25 +186,71 @@ class AnalyzeDecisionView(APIView):
                     })
 
         if missing_pairs:
-            logger.warning("AI analyze blocked: missing ratings decision_id=%s missing=%s", decision_id, len(missing_pairs))
-            return Response(
-                {
-                    'success': False,
-                    'error': 'Missing ratings for one or more factor/option pairs.',
-                    'missing_ratings': missing_pairs,
-                },
-                status=status.HTTP_400_BAD_REQUEST,
+            logger.info(
+                "AI analyze generating ratings decision_id=%s missing=%s",
+                decision_id,
+                len(missing_pairs),
             )
-        
-        # Get AI analysis
-        result = ai_service.analyze_decision(decision_data)
+            ai_input = {
+                'title': decision_data['title'],
+                'description': decision_data['description'],
+                'options': decision_data['options'],
+                'factors': decision_data['factors'],
+            }
+            result = ai_service.generate_ratings_and_analysis(ai_input)
+            if not result.get('success'):
+                return Response(
+                    {
+                        'success': False,
+                        'error': result.get('error', 'Failed to generate ratings.'),
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            factors_list = list(decision.decision_factors.all())
+            _persist_generated_ratings(
+                decision,
+                options_list,
+                factors_list,
+                result.get('ratings', []),
+            )
+
+            decision_data['ratings'] = []
+            factor_name_by_index = {idx: factor.name for idx, factor in enumerate(factors_list)}
+            for item in result.get('ratings', []):
+                decision_data['ratings'].append({
+                    'factor_name': factor_name_by_index.get(int(item['factor_index']), 'Factor'),
+                    'option_index': int(item['option_index']),
+                    'score': item['score'],
+                })
+        else:
+            factor_breakdown, score_rows = _compute_weighted_breakdown(
+                decision_data,
+                options_list,
+                list(decision.decision_factors.all()),
+                normalized_weights,
+            )
+            winner_index = next(
+                (idx for idx, option in enumerate(options_list) if str(option.id) == score_rows[0]['option_id']),
+                0,
+            ) if score_rows else 0
+            result = ai_service.generate_analysis_narrative(
+                decision_data,
+                winner_index,
+                score_rows,
+            )
+            if not result.get('success'):
+                return Response(
+                    {
+                        'success': False,
+                        'error': result.get('error', 'Analysis failed'),
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
         
         if result['success']:
             # Update decision with AI results
             recommended_idx = result.get('recommendation', 0)
-            
-            if 0 <= recommended_idx < len(options_list):
-                decision.ai_recommendation = options_list[recommended_idx]
             
             decision.ai_confidence = result.get('confidence', 0.5)
             decision.ai_explanation = result.get('summary') or result.get('explanation', '')
@@ -143,67 +268,27 @@ class AnalyzeDecisionView(APIView):
             decision.status = 'completed'
             decision.save()
             
-            # Update option AI scores
-            for score_data in result.get('option_scores', []):
-                idx = score_data.get('index', 0)
-                if 0 <= idx < len(options_list):
-                    options_list[idx].ai_score = score_data.get('score', 0)
-                    options_list[idx].save()
-            
-            factor_breakdown = []
             factors_list = list(decision.decision_factors.all())
-            ratings_by_key = {}
-            for factor in factors_list:
-                for rating in factor.ratings.all():
-                    ratings_by_key[(str(factor.id), str(rating.option_id))] = float(rating.score)
-
-            option_score_map = {}
-            for item in result.get('option_scores', []):
-                try:
-                    idx_key = int(item.get('index', -1))
-                    option_score_map[idx_key] = float(item.get('score', 0))
-                except (TypeError, ValueError):
-                    continue
-
-            for idx, option in enumerate(options_list):
-                fallback_score = option_score_map.get(idx, 0.0)
-                weighted_total = 0.0
-                per_factor = []
-                for f_idx, factor in enumerate(factors_list):
-                    n_weight = normalized_weights[f_idx] if f_idx < len(normalized_weights) else 0.0
-                    raw_score = ratings_by_key.get((str(factor.id), str(option.id)), 0.0)
-                    normalized_score = max(0.0, min(1.0, raw_score / 10.0))
-                    contribution = normalized_score * n_weight
-                    weighted_total += contribution
-                    per_factor.append({
-                        'factor_id': str(factor.id),
-                        'factor_name': factor.name,
-                        'type': decision_data['factors'][f_idx]['type'] if f_idx < len(decision_data['factors']) else 'pro',
-                        'normalized_weight': n_weight,
-                        'raw_score': raw_score,
-                        'normalized_score': normalized_score,
-                        'contribution': contribution,
-                    })
-                factor_breakdown.append({
-                    'option_id': str(option.id),
-                    'option_name': option.name,
-                    'weighted_score': weighted_total if weighted_total > 0 else fallback_score,
-                    'factors': per_factor,
-                })
-
-            score_rows = sorted(
-                [
-                    {
-                        'option_id': row['option_id'],
-                        'option_name': row['option_name'],
-                        'score': round(float(row['weighted_score']), 4),
-                        'percentage': round(float(row['weighted_score']) * 100, 2),
-                    }
-                    for row in factor_breakdown
-                ],
-                key=lambda x: x['score'],
-                reverse=True,
+            factor_breakdown, score_rows = _compute_weighted_breakdown(
+                decision_data,
+                options_list,
+                factors_list,
+                normalized_weights,
             )
+
+            if score_rows:
+                recommended_idx = next(
+                    (idx for idx, option in enumerate(options_list) if str(option.id) == score_rows[0]['option_id']),
+                    result.get('recommendation', 0),
+                )
+                if 0 <= recommended_idx < len(options_list):
+                    decision.ai_recommendation = options_list[recommended_idx]
+
+            for row in score_rows:
+                option = next((o for o in options_list if str(o.id) == row['option_id']), None)
+                if option:
+                    option.ai_score = row['score']
+                    option.save()
             weights = [
                 {
                     'factor_id': str(f.id),

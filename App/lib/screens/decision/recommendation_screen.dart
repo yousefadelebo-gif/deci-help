@@ -8,6 +8,8 @@ import 'package:fl_chart/fl_chart.dart';
 import '../../components/rating_components.dart';
 import '../../providers/decision_provider.dart';
 import '../../providers/feedback_provider.dart';
+import '../../services/api_service.dart';
+import '../../main.dart' show MainNavigationScreen;
 
 class RecommendationScreen extends StatefulWidget {
   const RecommendationScreen({super.key});
@@ -29,6 +31,7 @@ class _RecommendationScreenState extends State<RecommendationScreen> {
   List<Map<String, dynamic>> _factorBreakdown = [];
   List<double> _normalizedPercentages = [];
   String? _decisionId;
+  String? _loadedForDecisionId;
 
   // AI-generated insights from backend
   List<String> _insights = [];
@@ -50,6 +53,11 @@ class _RecommendationScreenState extends State<RecommendationScreen> {
     }
 
     decision ??= context.read<DecisionProvider>().currentDecision;
+
+    final incomingId = decision?['id']?.toString();
+    if (incomingId != null && incomingId == _loadedForDecisionId) {
+      return;
+    }
 
     _decisionTitle = '';
     _options = [];
@@ -156,9 +164,6 @@ class _RecommendationScreenState extends State<RecommendationScreen> {
         _normalizedPercentages =
             _scores.map<double>((s) => ((s / 10) * 100).clamp(0, 100).toDouble()).toList();
       }
-      debugPrint(
-        'Recommendation charts resolved scores=${_scores.length} radar=${_radarData.length} detailed=${_normalizedPercentages.length}',
-      );
 
       if (aiRecommendation != null) {
         final recId = aiRecommendation['id']?.toString();
@@ -168,6 +173,17 @@ class _RecommendationScreenState extends State<RecommendationScreen> {
       } else if (_scores.isNotEmpty) {
         _recommendedIndex =
             _scores.indexOf(_scores.reduce((a, b) => a > b ? a : b));
+      }
+
+      if (_factors.isEmpty && _factorBreakdown.isNotEmpty) {
+        final nested = _factorBreakdown.first['factors'];
+        if (nested is List && nested.isNotEmpty) {
+          _factors = nested
+              .map((f) => (f as Map)['factor_name']?.toString() ?? '')
+              .where((n) => n.isNotEmpty)
+              .cast<String>()
+              .toList();
+        }
       }
 
       if (_factorBreakdown.isNotEmpty) {
@@ -200,7 +216,33 @@ class _RecommendationScreenState extends State<RecommendationScreen> {
           }).toList();
         }
       }
+
+      _loadedForDecisionId = incomingId;
+      debugPrint(
+        'Recommendation charts resolved scores=${_scores.length} radar=${_radarData.length} detailed=${_normalizedPercentages.length} factors=${_factors.length}',
+      );
+
+      if (mounted) setState(() {});
     }
+  }
+
+  Future<void> _saveToJournal() async {
+    final id = _decisionId ??
+        context.read<DecisionProvider>().currentDecision?['id']?.toString();
+    if (id != null) {
+      await ApiService.saveJournalEntry(id, {
+        'reflection': _explanation,
+        'outcome_notes': 'Saved from AI recommendation',
+      });
+      await context.read<DecisionProvider>().updateDecision(id, {
+        'status': 'completed',
+      });
+    }
+    if (!mounted) return;
+    MainNavigationScreen.switchToTab(context, 2);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Saved to journal')),
+    );
   }
 
   @override
@@ -270,7 +312,7 @@ class _RecommendationScreenState extends State<RecommendationScreen> {
                 children: [
                   // Save to Journal Button
                   GestureDetector(
-                    onTap: () => Navigator.of(context).pushNamed('/journal'),
+                    onTap: _saveToJournal,
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 16),

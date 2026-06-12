@@ -11,6 +11,7 @@ import '../../widgets/app_text_field.dart';
 import '../../widgets/app_cards.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../providers/decision_provider.dart';
+import '../../services/api_service.dart';
 
 class MyAccountScreen extends StatefulWidget {
   const MyAccountScreen({super.key});
@@ -403,6 +404,16 @@ class _MyAccountScreenState extends State<MyAccountScreen> {
           TextButton(
             onPressed: () async {
               Navigator.pop(dialogContext);
+              final response = await ApiService.deleteAccount();
+              if (!context.mounted) return;
+              if (!response.isSuccess) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(response.error ?? 'Failed to delete account'),
+                  ),
+                );
+                return;
+              }
               await context.read<AuthProvider>().logout();
               if (context.mounted) {
                 Navigator.pushNamedAndRemoveUntil(

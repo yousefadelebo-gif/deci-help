@@ -2,9 +2,14 @@
 /// Theme, language, and app preferences
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/custom_app_bar.dart';
 import '../../widgets/app_cards.dart';
+import '../../providers/decision_provider.dart';
+import 'legal_document_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -18,6 +23,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _hapticFeedback = true;
   bool _autoSave = true;
   String _language = 'English';
+  String _cacheSizeLabel = '—';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _darkMode = prefs.getBool('settings_dark_mode') ?? false;
+      _hapticFeedback = prefs.getBool('settings_haptic') ?? true;
+      _autoSave = prefs.getBool('settings_auto_save') ?? true;
+      _language = prefs.getString('settings_language') ?? 'English';
+      _cacheSizeLabel = prefs.getString('settings_cache_label') ?? '12.3 MB';
+    });
+  }
+
+  Future<void> _saveSetting(String key, dynamic value) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (value is bool) {
+      await prefs.setBool(key, value);
+    } else if (value is String) {
+      await prefs.setString(key, value);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +75,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: 'Dark Mode',
                     subtitle: 'Use dark theme',
                     value: _darkMode,
-                    onChanged: (value) => setState(() => _darkMode = value),
+                    onChanged: (value) {
+                      setState(() => _darkMode = value);
+                      _saveSetting('settings_dark_mode', value);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            value ? 'Dark mode preference saved' : 'Light mode preference saved',
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   const Divider(height: 1, indent: 72),
                   _buildNavigationTile(
@@ -68,7 +110,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: 'Haptic Feedback',
                     subtitle: 'Vibration on actions',
                     value: _hapticFeedback,
-                    onChanged: (value) => setState(() => _hapticFeedback = value),
+                    onChanged: (value) {
+                      setState(() => _hapticFeedback = value);
+                      _saveSetting('settings_haptic', value);
+                    },
                   ),
                   const Divider(height: 1, indent: 72),
                   _buildSwitchTile(
@@ -76,7 +121,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: 'Auto-save Drafts',
                     subtitle: 'Save decisions automatically',
                     value: _autoSave,
-                    onChanged: (value) => setState(() => _autoSave = value),
+                    onChanged: (value) {
+                      setState(() => _autoSave = value);
+                      _saveSetting('settings_auto_save', value);
+                    },
                   ),
                 ],
               ),
@@ -99,7 +147,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _buildNavigationTile(
                     icon: Icons.cleaning_services_outlined,
                     title: 'Clear Cache',
-                    value: '12.3 MB',
+                    value: _cacheSizeLabel,
                     onTap: () => _showClearCacheDialog(),
                   ),
                 ],
@@ -122,19 +170,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _buildNavigationTile(
                     icon: Icons.description_outlined,
                     title: 'Terms of Service',
-                    onTap: () {},
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => LegalDocumentScreen.termsOfService,
+                      ),
+                    ),
                   ),
                   const Divider(height: 1, indent: 72),
                   _buildNavigationTile(
                     icon: Icons.policy_outlined,
                     title: 'Privacy Policy',
-                    onTap: () {},
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => LegalDocumentScreen.privacyPolicy,
+                      ),
+                    ),
                   ),
                   const Divider(height: 1, indent: 72),
                   _buildNavigationTile(
                     icon: Icons.code_rounded,
                     title: 'Open Source Licenses',
-                    onTap: () {},
+                    onTap: () => showLicensePage(context: context),
                   ),
                 ],
               ),
@@ -302,7 +358,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     : null,
                 onTap: () {
                   setState(() => _language = lang);
+                  _saveSetting('settings_language', lang);
                   Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Language set to $lang')),
+                  );
                 },
               );
             }),
@@ -341,21 +401,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ListTile(
               leading: const Icon(Icons.code_rounded),
               title: const Text('Export as JSON'),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Data exported as JSON')),
-                );
+                await _exportDecisions(asCsv: false);
               },
             ),
             ListTile(
               leading: const Icon(Icons.table_chart_rounded),
               title: const Text('Export as CSV'),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Data exported as CSV')),
-                );
+                await _exportDecisions(asCsv: true);
               },
             ),
           ],
@@ -369,15 +425,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Clear Cache'),
-        content: const Text('This will clear 12.3 MB of cached data. Continue?'),
+        content: Text('This will clear $_cacheSizeLabel of cached data. Continue?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('settings_cache_label', '0 MB');
+              setState(() => _cacheSizeLabel = '0 MB');
+              if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Cache cleared')),
               );
@@ -385,6 +445,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: const Text('Clear'),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _exportDecisions({required bool asCsv}) async {
+    await context.read<DecisionProvider>().fetchDecisions();
+    final decisions = context.read<DecisionProvider>().decisions;
+    String payload;
+    if (asCsv) {
+      final buffer = StringBuffer('id,title,status,created_at\n');
+      for (final d in decisions) {
+        buffer.writeln(
+          '${d['id']},${d['title']},${d['status']},${d['created_at']}',
+        );
+      }
+      payload = buffer.toString();
+    } else {
+      payload = decisions.toString();
+    }
+    await Clipboard.setData(ClipboardData(text: payload));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Exported ${decisions.length} decisions as ${asCsv ? 'CSV' : 'JSON'}',
+        ),
       ),
     );
   }

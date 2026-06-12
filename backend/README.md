@@ -58,16 +58,23 @@ Key settings:
 python manage.py migrate
 ```
 
-### 5. Create Superuser
+### 5. Seed Admin + Demo Data
+
+```bash
+python manage.py seed_demo_data
+```
+
+This creates:
+- **Admin:** `admin@decehelp.com` / `Admin123!` (Django admin + Swagger API admin)
+- **30 demo users:** `demo1@decehelp.test` … / `Demo123!`
+- Factor templates, decisions, journals, and feedback
+
+Options: `--users 50 --decisions-per-user 8 --flush`
+
+### 6. Create Superuser (optional manual alternative)
 
 ```bash
 python manage.py createsuperuser
-```
-
-### 6. Seed Factor Templates (Optional)
-
-```bash
-python manage.py shell < seeds/seed_factors.py
 ```
 
 ### 7. Run Server
@@ -122,6 +129,9 @@ The API will be available at `http://127.0.0.1:8000/api/v1/`
 ## API Documentation
 
 - Swagger UI: `http://127.0.0.1:8000/swagger/`
+  1. `POST /api/v1/auth/login/` with admin credentials
+  2. Click **Authorize** → enter `Bearer <access_token>`
+  3. Call admin endpoints like `/api/v1/auth/admin/stats/`
 - ReDoc: `http://127.0.0.1:8000/redoc/`
 
 ## Project Structure

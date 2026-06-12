@@ -8,6 +8,7 @@ import '../../theme/app_tokens.dart';
 import '../../widgets/custom_app_bar.dart';
 import '../../widgets/app_cards.dart';
 import '../../providers/decision_provider.dart';
+import '../../widgets/decision_edit_sheet.dart';
 
 class JournalScreen extends StatefulWidget {
   const JournalScreen({super.key});
@@ -279,8 +280,23 @@ class _JournalScreenState extends State<JournalScreen> {
         .pushNamed('/journal-detail', arguments: {'decision': decision});
   }
 
-  void _editDecision(Map<String, dynamic> decision) {
-    // Navigate to edit screen
+  Future<void> _editDecision(Map<String, dynamic> decision) async {
+    final id = decision['id']?.toString();
+    if (id == null || id.isEmpty) return;
+
+    final journal = decision['journal_entry'];
+    final reflection = journal is Map ? journal['reflection']?.toString() : null;
+
+    final updated = await showDecisionEditSheet(
+      context,
+      decisionId: id,
+      initialTitle: decision['title']?.toString() ?? 'Untitled',
+      initialReflection: reflection ?? decision['notes']?.toString(),
+    );
+
+    if (updated == true && mounted) {
+      await context.read<DecisionProvider>().fetchDecisions();
+    }
   }
 
   void _deleteDecision(Map<String, dynamic> decision) async {

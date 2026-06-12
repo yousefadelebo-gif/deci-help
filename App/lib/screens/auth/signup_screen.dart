@@ -1,6 +1,7 @@
 /// Decision Companion - Signup Screen
 /// Registration screen with email/password
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
@@ -213,6 +214,9 @@ class _SignupScreenState extends State<SignupScreen> {
                                 style: AppTypography.labelSmall.copyWith(
                                   color: AppColors.primary,
                                 ),
+                                recognizer: TapGestureRecognizer()
+                                  ..onTap = () =>
+                                      Navigator.pushNamed(context, '/help'),
                               ),
                               const TextSpan(text: ' and '),
                               TextSpan(
@@ -220,6 +224,11 @@ class _SignupScreenState extends State<SignupScreen> {
                                 style: AppTypography.labelSmall.copyWith(
                                   color: AppColors.primary,
                                 ),
+                                recognizer: TapGestureRecognizer()
+                                  ..onTap = () => Navigator.pushNamed(
+                                        context,
+                                        '/privacy',
+                                      ),
                               ),
                             ],
                           ),

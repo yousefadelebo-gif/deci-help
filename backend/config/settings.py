@@ -98,8 +98,9 @@ DATABASE_URL = config('DATABASE_URL', default='')
 DIRECT_URL = config('DIRECT_URL', default='')
 USE_DIRECT_DATABASE_URL = config('USE_DIRECT_DATABASE_URL', default=False, cast=bool)
 
+_direct_url_commands = ('migrate', 'makemigrations', 'seed_demo_data')
 active_database_url = DIRECT_URL if (
-    DIRECT_URL and (USE_DIRECT_DATABASE_URL or any(arg in sys.argv for arg in ('migrate', 'makemigrations')))
+    DIRECT_URL and (USE_DIRECT_DATABASE_URL or any(arg in sys.argv for arg in _direct_url_commands))
 ) else DATABASE_URL
 
 if active_database_url:
@@ -203,3 +204,25 @@ OPENROUTER_BASE_URL = config(
     default='https://openrouter.ai/api/v1',
 )
 OPENROUTER_MODEL = config('OPENROUTER_MODEL', default=OPENAI_MODEL)
+
+# API docs (Swagger / ReDoc) — JWT Bearer for admin & authenticated endpoints
+SWAGGER_SETTINGS = {
+    'SECURITY_DEFINITIONS': {
+        'Bearer': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header',
+            'description': 'JWT access token. Format: Bearer <token>',
+        },
+    },
+    'USE_SESSION_AUTH': False,
+    'LOGIN_URL': '/admin/login/',
+}
+
+REDOC_SETTINGS = {
+    'LAZY_RENDERING': True,
+}
+
+# Python 3.14 + Django 4.2 template context fix (admin changelist pages)
+from config.py314_compat import apply as _apply_py314_compat
+_apply_py314_compat()

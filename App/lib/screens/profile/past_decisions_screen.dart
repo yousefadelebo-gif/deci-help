@@ -23,6 +23,13 @@ class _PastDecisionsScreenState extends State<PastDecisionsScreen> {
     });
   }
 
+  void _openDecision(Map<String, dynamic> decision) {
+    Navigator.of(context).pushNamed(
+      '/journal-detail',
+      arguments: {'decision': decision},
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -75,57 +82,65 @@ class _PastDecisionsScreenState extends State<PastDecisionsScreen> {
                 const SizedBox(height: AppSpacing.sm),
             itemBuilder: (context, index) {
               final decision = decisions[index];
-              return Container(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: AppColors.cardBackground,
+              return Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => _openDecision(decision),
                   borderRadius:
                       BorderRadius.circular(AppSpacing.radiusMd),
-                  border: Border.all(color: AppColors.border),
-                  boxShadow: AppElevation.cardShadow,
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: AppColors.primarySurface,
-                        borderRadius: BorderRadius.circular(
-                            AppSpacing.radiusSm),
-                      ),
-                      child: const Icon(
-                        Icons.lightbulb_outline_rounded,
-                        color: AppColors.primary,
-                        size: 22,
-                      ),
+                  child: Container(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBackground,
+                      borderRadius:
+                          BorderRadius.circular(AppSpacing.radiusMd),
+                      border: Border.all(color: AppColors.border),
+                      boxShadow: AppElevation.cardShadow,
                     ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            decision['title'] ?? 'Untitled',
-                            style: AppTypography.bodyLarge,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: AppColors.primarySurface,
+                            borderRadius: BorderRadius.circular(
+                                AppSpacing.radiusSm),
                           ),
-                          const SizedBox(height: AppSpacing.xxs),
-                          Text(
-                            decision['status'] ?? 'completed',
-                            style: AppTypography.caption.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
+                          child: const Icon(
+                            Icons.lightbulb_outline_rounded,
+                            color: AppColors.primary,
+                            size: 22,
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                decision['title'] ?? 'Untitled',
+                                style: AppTypography.bodyLarge,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: AppSpacing.xxs),
+                              Text(
+                                decision['status'] ?? 'completed',
+                                style: AppTypography.caption.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.textTertiary,
+                        ),
+                      ],
                     ),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      color: AppColors.textTertiary,
-                    ),
-                  ],
+                  ),
                 ),
               );
             },

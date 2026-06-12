@@ -576,10 +576,22 @@ class _NewDecisionScreenState extends State<NewDecisionScreen>
     try {
       final provider = context.read<DecisionProvider>();
 
-      // 1. Create decision
+      // Create decision with options and factors in one request.
       final decisionId = await provider.createDecision({
         'title': _titleController.text,
         'status': 'analyzing',
+        'options': _options
+            .map((option) => {
+                  'name': option.title,
+                })
+            .toList(),
+        'factors': _selectedFactors
+            .map((factor) => {
+                  'name': factor.name,
+                  'weight': (_factorWeights[factor.id] ?? 5) / 10,
+                  'factor_type': _factorTypes[factor.id] ?? 'pro',
+                })
+            .toList(),
       });
 
       if (decisionId == null) {
@@ -593,55 +605,11 @@ class _NewDecisionScreenState extends State<NewDecisionScreen>
         return;
       }
 
-      // 2. Add options
-      final optionIdByLocalId = <String, String>{};
-      for (final option in _options) {
-        final created = await provider.addOption(decisionId, {'name': option.title});
-        final backendOptionId = created?['id']?.toString();
-        if (backendOptionId != null && backendOptionId.isNotEmpty) {
-          optionIdByLocalId[option.id] = backendOptionId;
-        }
-      }
-
-      // 3. Add factors
-      final factorIdByLocalId = <String, String>{};
-      for (final factor in _selectedFactors) {
-        final created = await provider.addFactor(decisionId, {
-          'name': factor.name,
-          'weight': (_factorWeights[factor.id] ?? 5) / 10,
-          'factor_type': _factorTypes[factor.id] ?? 'pro',
-        });
-        final backendFactorId = created?['id']?.toString();
-        if (backendFactorId != null && backendFactorId.isNotEmpty) {
-          factorIdByLocalId[factor.id] = backendFactorId;
-        }
-      }
-
-      final expectedRatingsCount =
-          optionIdByLocalId.length * factorIdByLocalId.length;
-
-      // 4. Generate and save real AI ratings for every option x factor pair.
-      final ratings = await _generateAIRatingMatrix(
-        optionIdByLocalId: optionIdByLocalId,
-        factorIdByLocalId: factorIdByLocalId,
-      );
       debugPrint(
-        'AI matrix decision=$decisionId options=${optionIdByLocalId.length} factors=${factorIdByLocalId.length} ratings=${ratings.length} expected=$expectedRatingsCount',
-      );
-      if (ratings.length != expectedRatingsCount) {
-        throw Exception(
-          'AI rating generation incomplete (${ratings.length}/$expectedRatingsCount).',
-        );
-      }
-      final ratingsSaved = await provider.saveRatings(decisionId, ratings);
-      if (!ratingsSaved) {
-        throw Exception(provider.error ?? 'Failed to save AI ratings.');
-      }
-      debugPrint(
-        'AI flow decision=$decisionId options=${_options.length} factors=${_selectedFactors.length} ratings=${ratings.length}',
+        'AI flow decision=$decisionId options=${_options.length} factors=${_selectedFactors.length}',
       );
 
-      // 5. Trigger AI analysis
+      // Single analyze call: backend generates ratings + narrative together.
       final analysisSuccess = await provider.analyzeWithAI(decisionId);
 
       if (mounted) Navigator.pop(context); // dismiss loading
@@ -659,7 +627,7 @@ class _NewDecisionScreenState extends State<NewDecisionScreen>
         return;
       }
 
-      // 6. Navigate to recommendation
+      // Navigate to recommendation
       if (mounted) {
         final current = provider.currentDecision;
         debugPrint(
@@ -676,68 +644,6 @@ class _NewDecisionScreenState extends State<NewDecisionScreen>
         );
       }
     }
-  }
-
-  Future<List<Map<String, dynamic>>> _generateAIRatingMatrix({
-    required Map<String, String> optionIdByLocalId,
-    required Map<String, String> factorIdByLocalId,
-  }) async {
-    final response = await ApiService.quickAnalyze({
-      'request_type': 'generate_ratings',
-      'title': _titleController.text.trim(),
-      'options': _options
-          .map((option) => {
-                'local_id': option.id,
-                'name': option.title,
-              })
-          .toList(),
-      'factors': _selectedFactors
-          .map((factor) => {
-                'local_id': factor.id,
-                'name': factor.name,
-                'type': _factorTypes[factor.id] ?? 'pro',
-                'weight': (_factorWeights[factor.id] ?? 5) / 10,
-              })
-          .toList(),
-    });
-
-    if (!response.isSuccess) {
-      throw Exception(response.error ?? 'AI rating generation failed.');
-    }
-
-    final generated = List<Map<String, dynamic>>.from(
-      response.data['ratings'] ?? [],
-    );
-    final ratings = <Map<String, dynamic>>[];
-    for (final item in generated) {
-      final optionIndex = (item['option_index'] as num?)?.toInt();
-      final factorIndex = (item['factor_index'] as num?)?.toInt();
-      final score = (item['score'] as num?)?.round();
-      if (optionIndex == null ||
-          factorIndex == null ||
-          score == null ||
-          optionIndex < 0 ||
-          optionIndex >= _options.length ||
-          factorIndex < 0 ||
-          factorIndex >= _selectedFactors.length) {
-        continue;
-      }
-      final localOptionId = _options[optionIndex].id;
-      final localFactorId = _selectedFactors[factorIndex].id;
-      final backendOptionId = optionIdByLocalId[localOptionId];
-      final backendFactorId = factorIdByLocalId[localFactorId];
-      if (backendOptionId == null || backendFactorId == null) continue;
-      final clampedScore = score.clamp(1, 10).toInt();
-      _factorScores[localFactorId] ??= {};
-      _factorScores[localFactorId]![localOptionId] = clampedScore;
-      ratings.add({
-        'factor_id': backendFactorId,
-        'option_id': backendOptionId,
-        'score': clampedScore,
-        'notes': item['reasoning']?.toString() ?? '',
-      });
-    }
-    return ratings;
   }
 
   @override
@@ -948,7 +854,7 @@ class _NewDecisionScreenState extends State<NewDecisionScreen>
                           ),
                         ),
                         Text(
-                          'Claude will analyze your options and provide insights',
+                          'AI will analyze your options and provide insights',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey[600],
@@ -2397,7 +2303,14 @@ class _NewDecisionScreenState extends State<NewDecisionScreen>
                   ? 'Tap the factors that matter for this decision'
                   : 'Everything is ready for final AI analysis',
               onTap: _selectedFactors.isEmpty
-                  ? () {}
+                  ? () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Select at least one factor first'),
+                        ),
+                      );
+                      _tabController.animateTo(1);
+                    }
                   : () => _tabController.animateTo(3),
             ),
           ],
@@ -2662,7 +2575,7 @@ class _NewDecisionScreenState extends State<NewDecisionScreen>
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Claude will analyze your decision',
+                      'AI will analyze your decision',
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.grey[500],
@@ -2822,10 +2735,16 @@ class _NewDecisionScreenState extends State<NewDecisionScreen>
                 child: _buildSummaryCard(
                   icon: Icons.psychology,
                   title: 'AI Model',
-                  value: 'Claude 3.5',
+                  value: 'AI',
                   color: const Color(0xFF0D9488),
                   isSet: true,
-                  onTap: null,
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('AI analysis uses your backend configuration'),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -3156,7 +3075,7 @@ class _NewDecisionScreenState extends State<NewDecisionScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Analyze with Claude AI',
+                  'Analyze with AI',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -3733,11 +3652,11 @@ class _AIAnalyzingDialogState extends State<_AIAnalyzingDialog>
   late Animation<double> _pulseAnimation;
   int _currentStep = 0;
   final List<String> _steps = [
-    'Preparing your decision...',
-    'Analyzing options...',
-    'Evaluating factors...',
-    'Claude is thinking...',
-    'Generating insights...',
+    'Saving your decision...',
+    'Scoring options against factors...',
+    'AI is analyzing trade-offs...',
+    'Building your recommendation...',
+    'Almost ready...',
   ];
 
   @override
@@ -3835,7 +3754,7 @@ class _AIAnalyzingDialogState extends State<_AIAnalyzingDialog>
 
             // Title
             const Text(
-              'Analyzing with Claude AI',
+              'Analyzing with AI',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
@@ -3913,7 +3832,7 @@ class _AIAnalyzingDialogState extends State<_AIAnalyzingDialog>
                   ),
                   const SizedBox(width: 8),
                   const Text(
-                    'Powered by Claude 3.5',
+                    'Powered by AI',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,

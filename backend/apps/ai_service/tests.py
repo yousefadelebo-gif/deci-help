@@ -29,9 +29,9 @@ class AIEndpointTests(APITestCase):
         FactorRating.objects.create(decision_factor=self.factor, option=self.option_a, score=8)
         FactorRating.objects.create(decision_factor=self.factor, option=self.option_b, score=6)
 
-    @patch('apps.ai_service.views.ai_service.analyze_decision')
-    def test_analyze_endpoint_returns_success_and_updates_status(self, mock_analyze):
-        mock_analyze.return_value = {
+    @patch('apps.ai_service.views.ai_service.generate_analysis_narrative')
+    def test_analyze_endpoint_returns_success_and_updates_status(self, mock_narrative):
+        mock_narrative.return_value = {
             'success': True,
             'recommendation': 0,
             'confidence': 0.8,
@@ -117,9 +117,9 @@ class AIEndpointTests(APITestCase):
         self.assertTrue(response.data['success'])
         self.assertEqual(len(response.data['ratings']), 2)
 
-    @patch('apps.ai_service.views.ai_service.analyze_decision')
-    def test_analyze_includes_documented_analysis_fields(self, mock_analyze):
-        mock_analyze.return_value = {
+    @patch('apps.ai_service.views.ai_service.generate_analysis_narrative')
+    def test_analyze_includes_documented_analysis_fields(self, mock_narrative):
+        mock_narrative.return_value = {
             'success': True,
             'recommendation': 0,
             'confidence': 0.8,
@@ -142,13 +142,26 @@ class AIEndpointTests(APITestCase):
         self.assertIn('weights', response.data)
         self.assertIn('winner', response.data)
 
-    @patch('apps.ai_service.views.ai_service.analyze_decision')
-    def test_analyze_blocks_when_ratings_missing(self, mock_analyze):
-        mock_analyze.return_value = {'success': True, 'recommendation': 0}
+    @patch('apps.ai_service.views.ai_service.generate_ratings_and_analysis')
+    def test_analyze_generates_ratings_when_missing(self, mock_combined):
+        mock_combined.return_value = {
+            'success': True,
+            'recommendation': 0,
+            'confidence': 0.7,
+            'explanation': 'Option A wins',
+            'insights': [],
+            'considerations': [],
+            'potential_risks': [],
+            'ratings': [
+                {'option_index': 0, 'factor_index': 0, 'score': 8},
+                {'option_index': 1, 'factor_index': 0, 'score': 6},
+            ],
+        }
         decision = Decision.objects.create(user=self.user, title='No ratings decision')
         DecisionOption.objects.create(decision=decision, name='Option A', order=0)
         DecisionOption.objects.create(decision=decision, name='Option B', order=1)
         DecisionFactor.objects.create(decision=decision, name='Speed', weight=0.5)
         response = self.client.post(f'/api/v1/ai/analyze/{decision.id}/', {}, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertFalse(response.data['success'])
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
+        self.assertEqual(FactorRating.objects.filter(decision_factor__decision=decision).count(), 2)

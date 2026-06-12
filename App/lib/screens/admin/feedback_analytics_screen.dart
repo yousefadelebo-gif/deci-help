@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../theme/app_tokens.dart';
+import '../../utils/export_helpers.dart';
 import '../../widgets/custom_app_bar.dart';
 import '../../widgets/app_cards.dart';
 import '../../components/rating_components.dart';
@@ -29,9 +30,19 @@ class _FeedbackAnalyticsScreenState extends State<FeedbackAnalyticsScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.download_rounded),
-            onPressed: () {
+            onPressed: () async {
+              await ExportHelpers.copyJsonToClipboard([
+                {
+                  'period': _selectedPeriod,
+                  'exported_at': DateTime.now().toIso8601String(),
+                  'summary': 'Feedback analytics snapshot',
+                },
+              ]);
+              if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Exporting report...')),
+                const SnackBar(
+                  content: Text('Report summary copied to clipboard'),
+                ),
               );
             },
           ),
@@ -291,12 +302,7 @@ class _FeedbackAnalyticsScreenState extends State<FeedbackAnalyticsScreen> {
               children: [
                 const Text('Recent Feedback', style: AppTypography.h4),
                 TextButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('All feedback view coming soon!')),
-                    );
-                  },
+                  onPressed: () => Navigator.pushNamed(context, '/admin'),
                   child: const Text('View All'),
                 ),
               ],

@@ -10,6 +10,10 @@ class AppConstants {
   static const String onboardingCompletedKey = 'onboarding_completed';
   static const String themeKey = 'theme_mode';
   static const String languageKey = 'language';
+  static const String privacyAnalyticsKey = 'privacy_analytics';
+  static const String privacyCloudBackupKey = 'privacy_cloud_backup';
+  static const String privacyBiometricKey = 'privacy_biometric';
+  static const String privacyAutoLockKey = 'privacy_auto_lock';
 
   // App Info
   static const String appName = 'Decision Companion';

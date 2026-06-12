@@ -2,7 +2,9 @@
 /// Central admin panel with horizontal tabs (Overview, Users, Feedback, Settings)
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/app_tokens.dart';
 import '../../services/api_service.dart';
 
@@ -406,7 +408,60 @@ class _OverviewTabState extends State<_OverviewTab> {
               ),
             ),
           ),
+          const SizedBox(height: AppSpacing.lg),
+
+          const Text('Admin Tools', style: AppTypography.h4),
+          const SizedBox(height: AppSpacing.sm),
+          _buildAdminToolTile(
+            context,
+            icon: Icons.analytics_outlined,
+            title: 'User Analytics',
+            route: '/admin/analytics',
+          ),
+          _buildAdminToolTile(
+            context,
+            icon: Icons.chat_bubble_outline_rounded,
+            title: 'Feedback Analytics',
+            route: '/admin/feedback',
+          ),
+          _buildAdminToolTile(
+            context,
+            icon: Icons.tune_rounded,
+            title: 'Factor Templates',
+            route: '/admin/factors',
+          ),
+          _buildAdminToolTile(
+            context,
+            icon: Icons.auto_awesome_rounded,
+            title: 'AI Parameters',
+            route: '/admin/ai',
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAdminToolTile(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String route,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: ListTile(
+        leading: Icon(icon, color: AppColors.primary),
+        title: Text(title, style: AppTypography.bodyLarge),
+        trailing: const Icon(
+          Icons.chevron_right_rounded,
+          color: AppColors.textTertiary,
+        ),
+        onTap: () => Navigator.pushNamed(context, route),
       ),
     );
   }
@@ -750,11 +805,68 @@ class _UsersTabState extends State<_UsersTab> {
                   title: Text('Export User Data',
                       style: AppTypography.bodyLarge
                           .copyWith(color: AppColors.success)),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Exporting user data...')),
-                    );
+                  onTap: () async {
+                    final response = await ApiService.getAdminUsers();
+                    if (!context.mounted) return;
+                    if (response.isSuccess) {
+                      final users = response.data['users'] ?? [];
+                      await Clipboard.setData(
+                        ClipboardData(text: users.toString()),
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Copied ${users is List ? users.length : 0} users to clipboard',
+                          ),
+                        ),
+                      );
+                    }
                   },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          const Text('Admin Tools', style: AppTypography.h4),
+          const SizedBox(height: AppSpacing.sm),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.analytics_outlined),
+                  title: const Text('User Analytics'),
+                  onTap: () =>
+                      Navigator.pushNamed(context, '/admin/analytics'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.feedback_outlined),
+                  title: const Text('Feedback Analytics'),
+                  onTap: () =>
+                      Navigator.pushNamed(context, '/admin/feedback'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.category_outlined),
+                  title: const Text('Factor Templates'),
+                  onTap: () => Navigator.pushNamed(context, '/admin/factors'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.psychology_outlined),
+                  title: const Text('AI Parameters'),
+                  onTap: () => Navigator.pushNamed(context, '/admin/ai'),
                 ),
               ],
             ),
@@ -876,9 +988,18 @@ class _FeedbackTabState extends State<_FeedbackTab> {
       final statsResponse = await ApiService.getFeedbackStats();
 
       if (feedbackResponse.isSuccess && feedbackResponse.data != null) {
+        final raw = feedbackResponse.data;
+        List<dynamic> items = [];
+        if (raw is List) {
+          items = raw;
+        } else if (raw is Map) {
+          items = List<dynamic>.from(raw['results'] ?? []);
+        }
         setState(() {
-          _feedbacks = List<Map<String, dynamic>>.from(
-              feedbackResponse.data['results'] ?? feedbackResponse.data ?? []);
+          _feedbacks = items
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
         });
       }
 
@@ -892,6 +1013,32 @@ class _FeedbackTabState extends State<_FeedbackTab> {
     } catch (e) {
       setState(() => _isLoading = false);
     }
+  }
+
+  String _feedbackUserName(Map<String, dynamic> feedback) {
+    final explicit = feedback['user_name']?.toString();
+    if (explicit != null && explicit.isNotEmpty) return explicit;
+
+    final email = feedback['user_email']?.toString();
+    if (email != null && email.isNotEmpty) {
+      return email.split('@').first;
+    }
+
+    final user = feedback['user'];
+    if (user is Map) {
+      final nested = user['email']?.toString();
+      if (nested != null && nested.isNotEmpty) {
+        return nested.split('@').first;
+      }
+    }
+
+    return 'User';
+  }
+
+  int _feedbackRating(Map<String, dynamic> feedback) {
+    final rating = feedback['rating'];
+    if (rating is num) return rating.round().clamp(1, 5);
+    return 5;
   }
 
   String _formatTime(String? dateStr) {
@@ -953,14 +1100,13 @@ class _FeedbackTabState extends State<_FeedbackTab> {
                   )
                 : Column(
                     children: _feedbacks.take(10).map((feedback) {
-                      final userName = feedback['user_name'] ??
-                          feedback['user']?['email']?.split('@')[0] ??
-                          'User';
                       return _buildFeedbackItem(
-                        userName,
-                        feedback['rating'] ?? 5,
-                        feedback['description'] ?? feedback['title'] ?? '',
-                        _formatTime(feedback['created_at']),
+                        _feedbackUserName(feedback),
+                        _feedbackRating(feedback),
+                        feedback['description']?.toString() ??
+                            feedback['title']?.toString() ??
+                            '',
+                        _formatTime(feedback['created_at']?.toString()),
                       );
                     }).toList(),
                   ),
@@ -1257,7 +1403,13 @@ class _SettingsTabState extends State<_SettingsTab> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setString('admin_ai_model', _aiModelVersion);
+                await prefs.setBool('admin_email_notifications', _emailNotifications);
+                await prefs.setBool('admin_auto_backup', _autoBackup);
+                await prefs.setBool('admin_analytics_tracking', _analyticsTracking);
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Settings saved successfully!')),
                 );

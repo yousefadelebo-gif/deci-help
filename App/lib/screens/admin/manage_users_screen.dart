@@ -2,7 +2,9 @@
 /// Admin view for user account management
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../theme/app_tokens.dart';
+import '../../utils/export_helpers.dart';
 import '../../widgets/custom_app_bar.dart';
 import '../../widgets/app_cards.dart';
 import '../../widgets/app_text_field.dart';
@@ -452,12 +454,18 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                       children: [
                         Expanded(
                           child: OutlinedButton.icon(
-                            onPressed: () {
+                            onPressed: () async {
                               Navigator.pop(context);
+                              await Clipboard.setData(
+                                ClipboardData(text: user.email),
+                              );
+                              if (!context.mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                    content: Text(
-                                        'Opening email to ${user.name}...')),
+                                  content: Text(
+                                    'Email copied: ${user.email}',
+                                  ),
+                                ),
                               );
                             },
                             icon: const Icon(Icons.email_rounded),
@@ -474,10 +482,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                           child: ElevatedButton.icon(
                             onPressed: () {
                               Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                    content: Text('Editing ${user.name}...')),
-                              );
+                              _showEditUserDialog(user);
                             },
                             icon: const Icon(Icons.edit_rounded),
                             label: const Text('Edit'),
@@ -528,11 +533,91 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       case 'delete':
         _showDeleteConfirmation(user);
         break;
+      case 'edit':
+        _showEditUserDialog(user);
+        break;
+      case 'suspend':
+        _updateUserStatus(user, 'Suspended');
+        break;
+      case 'activate':
+        _updateUserStatus(user, 'Active');
+        break;
       default:
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('$action action for ${user.name}')),
         );
     }
+  }
+
+  void _updateUserStatus(_UserData user, String status) {
+    setState(() {
+      final index = _users.indexWhere((u) => u.id == user.id);
+      if (index != -1) {
+        _users[index] = _UserData(
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar,
+          status: status,
+          decisions: user.decisions,
+          joinDate: user.joinDate,
+          lastActive: user.lastActive,
+          isStaff: user.isStaff,
+          isVerified: user.isVerified,
+        );
+      }
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${user.name} marked as $status')),
+    );
+  }
+
+  void _showEditUserDialog(_UserData user) {
+    final nameController = TextEditingController(text: user.name);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit User'),
+        content: AppTextField(
+          controller: nameController,
+          label: 'Display Name',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final name = nameController.text.trim();
+              if (name.isEmpty) return;
+              setState(() {
+                final index = _users.indexWhere((u) => u.id == user.id);
+                if (index != -1) {
+                  _users[index] = _UserData(
+                    id: user.id,
+                    name: name,
+                    email: user.email,
+                    avatar: name.isNotEmpty ? name[0].toUpperCase() : user.avatar,
+                    status: user.status,
+                    decisions: user.decisions,
+                    joinDate: user.joinDate,
+                    lastActive: user.lastActive,
+                    isStaff: user.isStaff,
+                    isVerified: user.isVerified,
+                  );
+                }
+              });
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('User updated')),
+              );
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showDeleteConfirmation(_UserData user) {
@@ -550,8 +635,9 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
+              setState(() => _users.removeWhere((u) => u.id == user.id));
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('${user.name} deleted')),
+                SnackBar(content: Text('${user.name} removed from list')),
               );
             },
             style: ElevatedButton.styleFrom(
@@ -577,20 +663,16 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Exporting as CSV...')),
-              );
+              await _exportUsers(asCsv: true);
             },
             child: const Text('CSV'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Exporting as JSON...')),
-              );
+              await _exportUsers(asCsv: false);
             },
             child: const Text('JSON'),
           ),
@@ -599,7 +681,41 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     );
   }
 
+  Future<void> _exportUsers({required bool asCsv}) async {
+    final rows = _users
+        .map(
+          (u) => {
+            'id': u.id,
+            'name': u.name,
+            'email': u.email,
+            'status': u.status,
+            'decisions': u.decisions,
+            'join_date': u.joinDate,
+            'last_active': u.lastActive,
+          },
+        )
+        .toList();
+
+    if (asCsv) {
+      await ExportHelpers.copyCsvToClipboard(rows);
+    } else {
+      await ExportHelpers.copyJsonToClipboard(rows);
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Exported ${_users.length} users as ${asCsv ? 'CSV' : 'JSON'} to clipboard',
+        ),
+      ),
+    );
+  }
+
   void _showAddUserDialog() {
+    final nameController = TextEditingController();
+    final emailController = TextEditingController();
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -608,6 +724,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
+              controller: nameController,
               decoration: const InputDecoration(
                 labelText: 'Full Name',
                 border: OutlineInputBorder(),
@@ -615,10 +732,12 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
             ),
             const SizedBox(height: AppSpacing.sm),
             TextField(
+              controller: emailController,
               decoration: const InputDecoration(
                 labelText: 'Email',
                 border: OutlineInputBorder(),
               ),
+              keyboardType: TextInputType.emailAddress,
             ),
           ],
         ),
@@ -629,9 +748,27 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
           ),
           ElevatedButton(
             onPressed: () {
+              final name = nameController.text.trim();
+              final email = emailController.text.trim();
+              if (name.isEmpty || email.isEmpty) return;
+              setState(() {
+                _users.insert(
+                  0,
+                  _UserData(
+                    id: DateTime.now().millisecondsSinceEpoch,
+                    name: name,
+                    email: email,
+                    avatar: name[0].toUpperCase(),
+                    status: 'Active',
+                    decisions: 0,
+                    joinDate: 'Today',
+                    lastActive: 'Never',
+                  ),
+                );
+              });
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('User invitation sent!')),
+                SnackBar(content: Text('Added $name to user list')),
               );
             },
             child: const Text('Invite'),

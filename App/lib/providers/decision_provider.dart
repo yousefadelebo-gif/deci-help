@@ -139,11 +139,14 @@ class DecisionProvider extends ChangeNotifier {
 
   // Add option to decision
   Future<Map<String, dynamic>?> addOption(
-      String decisionId, Map<String, dynamic> data) async {
+      String decisionId, Map<String, dynamic> data,
+      {bool refresh = false}) async {
     final response = await ApiService.addOption(decisionId, data);
 
     if (response.isSuccess) {
-      await fetchDecision(decisionId);
+      if (refresh) {
+        await fetchDecision(decisionId);
+      }
       return Map<String, dynamic>.from(response.data);
     } else {
       _error = response.error;
@@ -154,11 +157,14 @@ class DecisionProvider extends ChangeNotifier {
 
   // Add factor to decision
   Future<Map<String, dynamic>?> addFactor(
-      String decisionId, Map<String, dynamic> data) async {
+      String decisionId, Map<String, dynamic> data,
+      {bool refresh = false}) async {
     final response = await ApiService.addFactor(decisionId, data);
 
     if (response.isSuccess) {
-      await fetchDecision(decisionId);
+      if (refresh) {
+        await fetchDecision(decisionId);
+      }
       return Map<String, dynamic>.from(response.data);
     } else {
       _error = response.error;

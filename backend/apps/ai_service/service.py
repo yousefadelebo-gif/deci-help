@@ -33,7 +33,7 @@ OPENROUTER_MODEL = (
 
 
 class AIDecisionService:
-    """Service for AI-powered decision analysis using Claude via OpenRouter"""
+    """Service for AI-powered decision analysis via OpenRouter"""
     
     def __init__(self):
         self.client = None
@@ -331,6 +331,209 @@ Generate exactly {len(options) * len(factors)} ratings."""
                 'success': False,
                 'error': str(e),
                 'ratings': []
+            }
+
+    def _parse_json_content(self, content: str) -> Dict:
+        if '```json' in content:
+            content = content.split('```json')[1].split('```')[0]
+        elif '```' in content:
+            content = content.split('```')[1].split('```')[0]
+        return json.loads(content.strip())
+
+    def generate_ratings_and_analysis(self, decision_data: Dict) -> Dict:
+        """Generate factor ratings and narrative analysis in a single AI call."""
+        if not self.is_available():
+            return {
+                'success': False,
+                'error': 'AI service is not available',
+                'ratings': [],
+            }
+
+        try:
+            options = decision_data.get('options', [])
+            factors = decision_data.get('factors', [])
+            expected = len(options) * len(factors)
+
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": """You are a decision analyst. Rate each option against each factor (1-10) and recommend the best option.
+
+Rules:
+- Return one rating for every option_index x factor_index pair.
+- For pro factors, higher score means better performance.
+- For con factors, higher score means the option handles the downside better.
+- Base recommendation on weighted factor performance.
+
+Respond ONLY with valid JSON:
+{
+  "ratings": [{"option_index": 0, "factor_index": 0, "score": 8}],
+  "recommended_option_index": 0,
+  "confidence": 0.75,
+  "explanation": "2-3 sentence recommendation",
+  "insights": ["insight"],
+  "considerations": ["consideration"],
+  "potential_risks": ["risk"]
+}"""
+                    },
+                    {
+                        "role": "user",
+                        "content": f"""Decision: {decision_data.get('title', '')}
+Description: {decision_data.get('description', '')}
+
+Options:
+{json.dumps(options)}
+
+Factors:
+{json.dumps(factors)}
+
+Generate exactly {expected} ratings plus recommendation."""
+                    }
+                ],
+                temperature=0.4,
+                max_tokens=1800,
+            )
+
+            result = self._parse_json_content(response.choices[0].message.content)
+            normalized = []
+            seen = set()
+            for item in result.get('ratings', []):
+                try:
+                    option_index = int(item.get('option_index'))
+                    factor_index = int(item.get('factor_index'))
+                    score = float(item.get('score'))
+                except (TypeError, ValueError):
+                    continue
+                if not (0 <= option_index < len(options)) or not (0 <= factor_index < len(factors)):
+                    continue
+                score = max(1.0, min(10.0, score))
+                seen.add((option_index, factor_index))
+                normalized.append({
+                    'option_index': option_index,
+                    'factor_index': factor_index,
+                    'score': score,
+                    'reasoning': item.get('reasoning', ''),
+                })
+
+            if len(seen) != expected:
+                return {
+                    'success': False,
+                    'error': f'AI generated incomplete ratings ({len(seen)}/{expected}).',
+                    'ratings': normalized,
+                }
+
+            summary = result.get('summary') or result.get('explanation', '')
+            return {
+                'success': True,
+                'ratings': normalized,
+                'recommendation': result.get('recommended_option_index', 0),
+                'confidence': result.get('confidence', 0.5),
+                'summary': summary,
+                'explanation': summary,
+                'drivers': result.get('drivers') or result.get('insights', []),
+                'risks': result.get('risks') or result.get('potential_risks', []),
+                'questions': result.get('questions') or result.get('considerations', []),
+                'insights': result.get('insights', []),
+                'considerations': result.get('considerations', []),
+                'potential_risks': result.get('potential_risks', []),
+            }
+        except Exception as e:
+            logger.error(f"AI combined ratings/analysis error: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'ratings': [],
+            }
+
+    def generate_analysis_narrative(
+        self,
+        decision_data: Dict,
+        winner_index: int,
+        score_rows: List[Dict],
+    ) -> Dict:
+        """Generate recommendation narrative when scores are already computed locally."""
+        if not self.is_available():
+            return {
+                'success': False,
+                'error': 'AI service is not available',
+                'recommendation': None,
+            }
+
+        try:
+            options = decision_data.get('options', [])
+            winner_name = options[winner_index].get('name', f'Option {winner_index + 1}') if winner_index < len(options) else 'Top option'
+            score_summary = ', '.join(
+                f"{row['option_name']}: {row['percentage']}%"
+                for row in score_rows
+            )
+
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": """You explain a data-driven decision recommendation. Scores are already computed — do NOT recalculate them.
+
+Respond ONLY with valid JSON:
+{
+  "explanation": "2-3 sentences referencing factors and trade-offs",
+  "insights": ["insight"],
+  "considerations": ["consideration"],
+  "potential_risks": ["risk"]
+}"""
+                    },
+                    {
+                        "role": "user",
+                        "content": f"""Decision: {decision_data.get('title', '')}
+Recommended: {winner_name} (index {winner_index})
+Computed scores: {score_summary}
+
+Factors:
+{json.dumps(decision_data.get('factors', []))}
+
+Ratings:
+{json.dumps(decision_data.get('ratings', []))}
+
+Write a concise narrative for the user."""
+                    }
+                ],
+                temperature=0.5,
+                max_tokens=800,
+            )
+
+            result = self._parse_json_content(response.choices[0].message.content)
+            summary = result.get('summary') or result.get('explanation', '')
+            option_scores = [
+                {
+                    'index': idx,
+                    'score': round(float(row['score']), 4),
+                    'reasoning': '',
+                }
+                for idx, row in enumerate(score_rows)
+            ]
+
+            return {
+                'success': True,
+                'recommendation': winner_index,
+                'confidence': min(0.95, 0.55 + (score_rows[0]['score'] - (score_rows[1]['score'] if len(score_rows) > 1 else 0)) * 2),
+                'summary': summary,
+                'explanation': summary,
+                'drivers': result.get('drivers') or result.get('insights', []),
+                'risks': result.get('risks') or result.get('potential_risks', []),
+                'questions': result.get('questions') or result.get('considerations', []),
+                'insights': result.get('insights', []),
+                'considerations': result.get('considerations', []),
+                'potential_risks': result.get('potential_risks', []),
+                'option_scores': option_scores,
+            }
+        except Exception as e:
+            logger.error(f"AI narrative error: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'recommendation': None,
             }
     
     def suggest_factors(self, decision_data: Dict) -> Dict:

@@ -12,7 +12,7 @@ class ApiService {
 
   // Request timeout for faster failure detection
   static const Duration _timeout = Duration(seconds: 10);
-  // Longer timeout for AI operations (Claude API can take 30-60s)
+  // Longer timeout for AI operations (can take 30-60s)
   static const Duration _aiTimeout = Duration(seconds: 60);
 
   // Persistent HTTP client for connection pooling
@@ -303,6 +303,10 @@ class ApiService {
       'new_password': newPassword,
       'new_password2': newPassword,
     });
+  }
+
+  static Future<ApiResponse> deleteAccount() async {
+    return delete('/auth/delete-account/');
   }
 
   // ==================== ADMIN ENDPOINTS ====================

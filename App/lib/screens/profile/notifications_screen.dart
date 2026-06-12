@@ -2,8 +2,11 @@
 /// Manage alerts and notification preferences
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/app_cards.dart';
+import '../../providers/decision_provider.dart';
 import 'package:intl/intl.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -19,6 +22,31 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   bool _decisionReminders = true;
   bool _weeklyInsights = true;
   bool _marketingEmails = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPrefs();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<DecisionProvider>().fetchDecisions();
+    });
+  }
+
+  Future<void> _loadPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _pushNotifications = prefs.getBool('notif_push') ?? true;
+      _emailNotifications = prefs.getBool('notif_email') ?? false;
+      _decisionReminders = prefs.getBool('notif_reminders') ?? true;
+      _weeklyInsights = prefs.getBool('notif_weekly') ?? true;
+      _marketingEmails = prefs.getBool('notif_marketing') ?? false;
+    });
+  }
+
+  Future<void> _savePref(String key, bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(key, value);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -67,8 +95,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Widget _buildInboxTab() {
-    // TODO: Connect to notifications API when available
-    final List<_NotificationItem> notifications = [];
+    final decisions = context.watch<DecisionProvider>().decisions;
+    final notifications = decisions.take(20).map((d) {
+      final created = DateTime.tryParse(d['created_at']?.toString() ?? '') ??
+          DateTime.now();
+      return _NotificationItem(
+        title: d['title']?.toString() ?? 'Decision update',
+        message: 'Status: ${d['status'] ?? 'draft'}',
+        type: _NotificationType.decision,
+        createdAt: created,
+      );
+    }).toList();
 
     if (notifications.isEmpty) {
       return Center(
@@ -109,12 +146,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
       itemBuilder: (context, index) {
         final notification = notifications[index];
-        return _buildNotificationCard(notification);
+        final decisionId = decisions[index]['id']?.toString();
+        return _buildNotificationCard(notification, decisionId);
       },
     );
   }
 
-  Widget _buildNotificationCard(_NotificationItem notification) {
+  Widget _buildNotificationCard(_NotificationItem notification, String? decisionId) {
     IconData icon = Icons.notifications_rounded;
     Color color = AppColors.textSecondary;
 
@@ -139,6 +177,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.md),
+      onTap: decisionId == null
+          ? null
+          : () => Navigator.pushNamed(
+                context,
+                '/decision-detail',
+                arguments: {'id': decisionId},
+              ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -216,8 +261,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   title: 'Push Notifications',
                   subtitle: 'Receive push notifications',
                   value: _pushNotifications,
-                  onChanged: (value) =>
-                      setState(() => _pushNotifications = value),
+                  onChanged: (value) {
+                    setState(() => _pushNotifications = value);
+                    _savePref('notif_push', value);
+                  },
                 ),
                 const Divider(height: 1, indent: 72),
                 _buildSwitchTile(
@@ -225,8 +272,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   title: 'Decision Reminders',
                   subtitle: 'Remind about pending decisions',
                   value: _decisionReminders,
-                  onChanged: (value) =>
-                      setState(() => _decisionReminders = value),
+                  onChanged: (value) {
+                    setState(() => _decisionReminders = value);
+                    _savePref('notif_reminders', value);
+                  },
                 ),
                 const Divider(height: 1, indent: 72),
                 _buildSwitchTile(
@@ -234,7 +283,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   title: 'Weekly Insights',
                   subtitle: 'Get weekly decision summaries',
                   value: _weeklyInsights,
-                  onChanged: (value) => setState(() => _weeklyInsights = value),
+                  onChanged: (value) {
+                    setState(() => _weeklyInsights = value);
+                    _savePref('notif_weekly', value);
+                  },
                 ),
               ],
             ),
@@ -250,8 +302,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   title: 'Email Notifications',
                   subtitle: 'Receive email updates',
                   value: _emailNotifications,
-                  onChanged: (value) =>
-                      setState(() => _emailNotifications = value),
+                  onChanged: (value) {
+                    setState(() => _emailNotifications = value);
+                    _savePref('notif_email', value);
+                  },
                 ),
                 const Divider(height: 1, indent: 72),
                 _buildSwitchTile(
@@ -259,8 +313,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   title: 'Marketing Emails',
                   subtitle: 'Product updates and offers',
                   value: _marketingEmails,
-                  onChanged: (value) =>
-                      setState(() => _marketingEmails = value),
+                  onChanged: (value) {
+                    setState(() => _marketingEmails = value);
+                    _savePref('notif_marketing', value);
+                  },
                 ),
               ],
             ),

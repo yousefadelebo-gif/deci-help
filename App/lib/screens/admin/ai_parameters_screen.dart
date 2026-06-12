@@ -27,6 +27,7 @@ class _AIParametersScreenState extends State<AIParametersScreen> {
   bool _enableFactorWeighting = true;
   bool _enableHistoricalAnalysis = true;
   bool _enableRiskAssessment = true;
+  bool _debugMode = false;
 
   // Recommendation Settings
   int _maxOptions = 5;
@@ -137,7 +138,7 @@ class _AIParametersScreenState extends State<AIParametersScreen> {
                   ),
                   const Divider(height: AppSpacing.lg),
                   _buildModelOption(
-                    'Claude',
+                    'AI',
                     'Great for nuanced analysis',
                     Icons.psychology_rounded,
                     AppColors.secondary,
@@ -326,7 +327,23 @@ class _AIParametersScreenState extends State<AIParametersScreen> {
                     title: const Text('API Configuration'),
                     subtitle: const Text('Manage API keys and endpoints'),
                     trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () {},
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('API Configuration'),
+                          content: const Text(
+                            'AI requests are routed through the backend using your server API keys. Configure keys in backend/.env.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: const Text('OK'),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                   const Divider(height: 1),
                   ListTile(
@@ -343,8 +360,13 @@ class _AIParametersScreenState extends State<AIParametersScreen> {
                     title: const Text('Debug Mode'),
                     subtitle: const Text('Enable detailed logging'),
                     trailing: Switch(
-                      value: false,
-                      onChanged: (value) {},
+                      value: _debugMode,
+                      onChanged: (value) {
+                        setState(() {
+                          _debugMode = value;
+                          _hasChanges = true;
+                        });
+                      },
                       activeColor: AppColors.primary,
                     ),
                   ),

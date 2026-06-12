@@ -31,6 +31,19 @@ class DecisionListCreateView(generics.ListCreateAPIView):
         if self.request.method == 'POST':
             return CreateDecisionSerializer
         return DecisionListSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        decision = serializer.save()
+        decision = Decision.objects.prefetch_related(
+            'options',
+            'decision_factors',
+        ).get(pk=decision.pk)
+        return Response(
+            DecisionDetailSerializer(decision).data,
+            status=status.HTTP_201_CREATED,
+        )
     
     def get_queryset(self):
         queryset = Decision.objects.filter(user=self.request.user)

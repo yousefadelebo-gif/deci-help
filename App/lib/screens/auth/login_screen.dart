@@ -400,11 +400,7 @@ class _LoginScreenState extends State<LoginScreen>
             alignment: Alignment.centerRight,
             child: TextButton(
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Password reset coming soon!'),
-                  ),
-                );
+                Navigator.pushNamed(context, '/help');
               },
               style: TextButton.styleFrom(
                 padding: EdgeInsets.zero,
@@ -478,12 +474,7 @@ class _LoginScreenState extends State<LoginScreen>
                   icon: Icons.g_mobiledata_rounded,
                   label: 'Google',
                   color: const Color(0xFFEA4335),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Google login coming soon!')),
-                    );
-                  },
+                  onPressed: () => Navigator.pushNamed(context, '/signup'),
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -492,11 +483,7 @@ class _LoginScreenState extends State<LoginScreen>
                   icon: Icons.apple_rounded,
                   label: 'Apple',
                   color: Colors.black,
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Apple login coming soon!')),
-                    );
-                  },
+                  onPressed: () => Navigator.pushNamed(context, '/signup'),
                 ),
               ),
             ],

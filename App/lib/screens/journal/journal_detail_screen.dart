@@ -3,20 +3,141 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/custom_app_bar.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_cards.dart';
+import '../../widgets/decision_edit_sheet.dart';
 import '../../components/rating_components.dart';
 import '../../models/models.dart';
+import '../../providers/decision_provider.dart';
 
-class JournalDetailScreen extends StatelessWidget {
+class JournalDetailScreen extends StatefulWidget {
   final Decision decision;
 
   const JournalDetailScreen({
     super.key,
     required this.decision,
   });
+
+  @override
+  State<JournalDetailScreen> createState() => _JournalDetailScreenState();
+}
+
+class _JournalDetailScreenState extends State<JournalDetailScreen> {
+  late Decision _decision;
+  double _pendingRating = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _decision = widget.decision;
+  }
+
+  Future<void> _editDecision() async {
+    final updated = await showDecisionEditSheet(
+      context,
+      decisionId: _decision.id,
+      initialTitle: _decision.title,
+      initialReflection: _decision.notes,
+    );
+
+    if (updated == true && mounted) {
+      await context.read<DecisionProvider>().fetchDecision(_decision.id);
+      final refreshed = context.read<DecisionProvider>().currentDecision;
+      if (refreshed != null) {
+        setState(() {
+          _decision = _decision.copyWith(
+            title: refreshed['title']?.toString() ?? _decision.title,
+            notes: refreshed['journal_entry'] is Map
+                ? refreshed['journal_entry']['reflection']?.toString()
+                : _decision.notes,
+          );
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteDecision() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Decision'),
+        content: const Text(
+          'Are you sure you want to delete this decision? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: AppColors.error),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    final success = await context
+        .read<DecisionProvider>()
+        .deleteDecision(_decision.id);
+
+    if (!mounted) return;
+
+    if (success) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Decision deleted')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.read<DecisionProvider>().error ?? 'Failed to delete',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _saveRating() async {
+    if (_pendingRating < 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a rating')),
+      );
+      return;
+    }
+
+    final success = await context.read<DecisionProvider>().saveSatisfaction(
+          _decision.id,
+          _pendingRating,
+        );
+
+    if (!mounted) return;
+
+    if (success) {
+      setState(() => _decision = _decision.copyWith(satisfaction: _pendingRating));
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Rating saved')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.read<DecisionProvider>().error ?? 'Failed to save rating',
+          ),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,15 +148,11 @@ class JournalDetailScreen extends StatelessWidget {
         showBackButton: true,
         actions: [
           IconButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Edit feature coming soon!')),
-              );
-            },
+            onPressed: _editDecision,
             icon: const Icon(Icons.edit_rounded),
           ),
           IconButton(
-            onPressed: () => _showDeleteDialog(context),
+            onPressed: _deleteDecision,
             icon: const Icon(Icons.delete_outline_rounded),
           ),
         ],
@@ -45,12 +162,11 @@ class JournalDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Title and Status
             Row(
               children: [
                 Expanded(
                   child: Text(
-                    decision.title,
+                    _decision.title,
                     style: AppTypography.h2,
                   ),
                 ),
@@ -59,42 +175,39 @@ class JournalDetailScreen extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              DateFormat('MMMM d, yyyy • h:mm a').format(decision.createdAt),
+              DateFormat('MMMM d, yyyy • h:mm a').format(_decision.createdAt),
               style: AppTypography.caption,
             ),
             const SizedBox(height: AppSpacing.lg),
 
-            // Chosen Option (if completed)
-            if (decision.result != null) ...[
+            if (_decision.result != null) ...[
               _buildChosenOption(),
               const SizedBox(height: AppSpacing.lg),
             ],
 
-            // Options
             const Text('Options Considered', style: AppTypography.h3),
             const SizedBox(height: AppSpacing.sm),
-            ...decision.options.map((option) {
+            ..._decision.options.map((option) {
               final isChosen =
-                  decision.result?.recommendedOptionId == option.id;
+                  _decision.result?.recommendedOptionId == option.id;
               return Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.xs),
                 child: OptionCard(
                   title: option.title,
-                  index: decision.options.indexOf(option),
+                  index: _decision.options.indexOf(option),
                   isSelected: isChosen,
                 ),
               );
             }),
             const SizedBox(height: AppSpacing.lg),
 
-            // Factors
-            if (decision.factors.isNotEmpty) ...[
+            if (_decision.factors.isNotEmpty) ...[
               const Text('Factors', style: AppTypography.h3),
               const SizedBox(height: AppSpacing.sm),
               Wrap(
                 spacing: AppSpacing.xs,
                 runSpacing: AppSpacing.xs,
-                children: decision.factors.map((factor) {
+                children: _decision.factors.map((factor) {
                   return Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.sm,
@@ -124,8 +237,7 @@ class JournalDetailScreen extends StatelessWidget {
               const SizedBox(height: AppSpacing.lg),
             ],
 
-            // Confidence and Score (if completed)
-            if (decision.result != null) ...[
+            if (_decision.result != null) ...[
               Row(
                 children: [
                   Expanded(
@@ -139,7 +251,7 @@ class JournalDetailScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: AppSpacing.xs),
                           Text(
-                            '${decision.result!.confidence.toInt()}%',
+                            '${_decision.result!.confidence.toInt()}%',
                             style: AppTypography.h2,
                           ),
                           const Text('Confidence',
@@ -160,7 +272,7 @@ class JournalDetailScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: AppSpacing.xs),
                           Text(
-                            decision.satisfaction?.toString() ?? '--',
+                            _decision.satisfaction?.toString() ?? '--',
                             style: AppTypography.h2,
                           ),
                           const Text('Satisfaction',
@@ -174,27 +286,26 @@ class JournalDetailScreen extends StatelessWidget {
               const SizedBox(height: AppSpacing.lg),
             ],
 
-            // AI Explanation (if completed)
-            if (decision.result?.explanation != null) ...[
+            if (_decision.result?.explanation != null) ...[
               const Text('AI Analysis', style: AppTypography.h3),
               const SizedBox(height: AppSpacing.sm),
               InsightCard(
                 title: 'Recommendation Reason',
-                description: decision.result!.explanation,
+                description: _decision.result!.explanation,
                 icon: Icons.auto_awesome_rounded,
                 color: AppColors.accent,
               ),
               const SizedBox(height: AppSpacing.lg),
             ],
 
-            // Notes/Reflection
             const Text('Notes & Reflection', style: AppTypography.h3),
             const SizedBox(height: AppSpacing.sm),
             AppCard(
+              onTap: _editDecision,
               padding: const EdgeInsets.all(AppSpacing.md),
-              child: decision.notes?.isNotEmpty == true
+              child: _decision.notes?.isNotEmpty == true
                   ? Text(
-                      decision.notes!,
+                      _decision.notes!,
                       style: AppTypography.bodyMedium,
                     )
                   : Row(
@@ -216,9 +327,8 @@ class JournalDetailScreen extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.xxl),
 
-            // Satisfaction Rating
-            if (decision.status == DecisionStatus.completed &&
-                decision.satisfaction == null) ...[
+            if (_decision.status == DecisionStatus.completed &&
+                _decision.satisfaction == null) ...[
               AppButton(
                 text: 'Rate This Decision',
                 variant: AppButtonVariant.outline,
@@ -237,7 +347,7 @@ class JournalDetailScreen extends StatelessWidget {
     String text;
     IconData icon;
 
-    switch (decision.status) {
+    switch (_decision.status) {
       case DecisionStatus.completed:
         color = AppColors.success;
         text = 'Completed';
@@ -284,9 +394,9 @@ class JournalDetailScreen extends StatelessWidget {
   }
 
   Widget _buildChosenOption() {
-    final chosenOption = decision.options.firstWhere(
-      (o) => o.id == decision.result!.recommendedOptionId,
-      orElse: () => decision.options.first,
+    final chosenOption = _decision.options.firstWhere(
+      (o) => o.id == _decision.result!.recommendedOptionId,
+      orElse: () => _decision.options.first,
     );
 
     return Container(
@@ -334,34 +444,6 @@ class JournalDetailScreen extends StatelessWidget {
     );
   }
 
-  void _showDeleteDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Decision'),
-        content: const Text(
-          'Are you sure you want to delete this decision? This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
-            },
-            child: const Text(
-              'Delete',
-              style: TextStyle(color: AppColors.error),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _showRatingSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -389,11 +471,16 @@ class JournalDetailScreen extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
             const Text('How satisfied are you?', style: AppTypography.h3),
             const SizedBox(height: AppSpacing.lg),
-            const InteractiveStarRating(size: 48),
+            InteractiveStarRating(
+              size: 48,
+              onRatingChanged: (value) {
+                setState(() => _pendingRating = value);
+              },
+            ),
             const SizedBox(height: AppSpacing.lg),
             AppButton(
               text: 'Submit',
-              onPressed: () => Navigator.pop(context),
+              onPressed: _saveRating,
             ),
             SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
           ],
