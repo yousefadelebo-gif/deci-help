@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../../services/api_service.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/custom_app_bar.dart';
 import '../../widgets/app_cards.dart';
@@ -16,6 +17,35 @@ class UserAnalyticsScreen extends StatefulWidget {
 
 class _UserAnalyticsScreenState extends State<UserAnalyticsScreen> {
   String _selectedPeriod = '7 days';
+  bool _isLoading = true;
+  String? _error;
+  Map<String, dynamic> _analytics = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAnalytics();
+  }
+
+  Future<void> _loadAnalytics() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    final response = await ApiService.getAdminUserAnalytics();
+    if (!mounted) return;
+    if (response.isSuccess) {
+      setState(() {
+        _analytics = Map<String, dynamic>.from(response.data);
+        _isLoading = false;
+      });
+    } else {
+      setState(() {
+        _error = response.error ?? 'Failed to load user analytics';
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +55,11 @@ class _UserAnalyticsScreenState extends State<UserAnalyticsScreen> {
         title: 'User Analytics',
         showBackButton: true,
       ),
-      body: SingleChildScrollView(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? _buildErrorState()
+              : SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.screenPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -64,8 +98,8 @@ class _UserAnalyticsScreenState extends State<UserAnalyticsScreen> {
                 Expanded(
                   child: _buildMetricCard(
                     'New Users',
-                    '428',
-                    '+18%',
+                    '${_metricInt('new_users')}',
+                    _changeLabel('user_growth_rate'),
                     Icons.person_add_rounded,
                     AppColors.primary,
                   ),
@@ -74,8 +108,8 @@ class _UserAnalyticsScreenState extends State<UserAnalyticsScreen> {
                 Expanded(
                   child: _buildMetricCard(
                     'Active Users',
-                    '1,247',
-                    '+5%',
+                    '${_metricInt('active_users')}',
+                    '',
                     Icons.people_rounded,
                     AppColors.secondary,
                   ),
@@ -88,8 +122,8 @@ class _UserAnalyticsScreenState extends State<UserAnalyticsScreen> {
                 Expanded(
                   child: _buildMetricCard(
                     'Retention Rate',
-                    '73%',
-                    '+2%',
+                    '${_metricDouble('retention_rate').toStringAsFixed(0)}%',
+                    '',
                     Icons.repeat_rounded,
                     AppColors.success,
                   ),
@@ -98,8 +132,8 @@ class _UserAnalyticsScreenState extends State<UserAnalyticsScreen> {
                 Expanded(
                   child: _buildMetricCard(
                     'Avg. Session',
-                    '8.5 min',
-                    '+1.2',
+                    '${_metricDouble('average_session_minutes').toStringAsFixed(1)} min',
+                    '',
                     Icons.timer_rounded,
                     AppColors.info,
                   ),
@@ -145,12 +179,11 @@ class _UserAnalyticsScreenState extends State<UserAnalyticsScreen> {
                         sideTitles: SideTitles(
                           showTitles: true,
                           getTitlesWidget: (value, meta) {
-                            final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-                            if (value.toInt() >= 0 && value.toInt() < days.length) {
+                            if (value.toInt() >= 0 && value.toInt() < _userGrowth.length) {
                               return Padding(
                                 padding: const EdgeInsets.only(top: 8),
                                 child: Text(
-                                  days[value.toInt()],
+                                  _userGrowth[value.toInt()]['label']?.toString() ?? '',
                                   style: AppTypography.labelSmall.copyWith(
                                     color: AppColors.textTertiary,
                                   ),
@@ -167,15 +200,7 @@ class _UserAnalyticsScreenState extends State<UserAnalyticsScreen> {
                     borderData: FlBorderData(show: false),
                     lineBarsData: [
                       LineChartBarData(
-                        spots: const [
-                          FlSpot(0, 180),
-                          FlSpot(1, 220),
-                          FlSpot(2, 195),
-                          FlSpot(3, 280),
-                          FlSpot(4, 310),
-                          FlSpot(5, 260),
-                          FlSpot(6, 340),
-                        ],
+                        spots: _userGrowthSpots,
                         isCurved: true,
                         color: AppColors.primary,
                         barWidth: 3,
@@ -188,7 +213,7 @@ class _UserAnalyticsScreenState extends State<UserAnalyticsScreen> {
                       ),
                     ],
                     minY: 0,
-                    maxY: 400,
+                    maxY: _maxLineY(_userGrowth, 'count'),
                   ),
                 ),
               ),
@@ -205,16 +230,17 @@ class _UserAnalyticsScreenState extends State<UserAnalyticsScreen> {
                 child: BarChart(
                   BarChartData(
                     alignment: BarChartAlignment.spaceAround,
-                    barGroups: List.generate(12, (index) {
-                      final values = [30, 20, 15, 10, 25, 45, 80, 95, 85, 70, 55, 40];
+                    barGroups: List.generate(_activityByHour.length, (index) {
+                      final count =
+                          _asDouble(_activityByHour[index]['count']);
                       return BarChartGroupData(
                         x: index,
                         barRods: [
                           BarChartRodData(
-                            toY: values[index].toDouble(),
-                            color: index == 7 || index == 8
+                            toY: count,
+                            color: count > 0
                                 ? AppColors.primary
-                                : AppColors.primary.withOpacity(0.4),
+                                : AppColors.primary.withOpacity(0.2),
                             width: 16,
                             borderRadius: const BorderRadius.vertical(
                               top: Radius.circular(4),
@@ -233,12 +259,11 @@ class _UserAnalyticsScreenState extends State<UserAnalyticsScreen> {
                         sideTitles: SideTitles(
                           showTitles: true,
                           getTitlesWidget: (value, meta) {
-                            final hours = ['6a', '8a', '10a', '12p', '2p', '4p', '6p', '8p', '10p', '12a', '2a', '4a'];
-                            if (value.toInt() >= 0 && value.toInt() < hours.length) {
+                            if (value.toInt() >= 0 && value.toInt() < _activityByHour.length) {
                               return Padding(
                                 padding: const EdgeInsets.only(top: 8),
                                 child: Text(
-                                  hours[value.toInt()],
+                                  _activityByHour[value.toInt()]['label']?.toString() ?? '',
                                   style: AppTypography.labelSmall.copyWith(
                                     color: AppColors.textTertiary,
                                     fontSize: 10,
@@ -257,45 +282,97 @@ class _UserAnalyticsScreenState extends State<UserAnalyticsScreen> {
             ),
             const SizedBox(height: AppSpacing.xl),
 
-            // User Demographics
-            const Text('User Demographics', style: AppTypography.h4),
-            const SizedBox(height: AppSpacing.sm),
-            AppCard(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Column(
-                children: [
-                  _buildDemographicRow('18-24', 0.15, '15%'),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildDemographicRow('25-34', 0.35, '35%'),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildDemographicRow('35-44', 0.28, '28%'),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildDemographicRow('45-54', 0.14, '14%'),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildDemographicRow('55+', 0.08, '8%'),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-
             // Top Decision Categories
             const Text('Popular Decision Categories', style: AppTypography.h4),
             const SizedBox(height: AppSpacing.sm),
             AppCard(
               padding: const EdgeInsets.all(AppSpacing.md),
               child: Column(
-                children: [
-                  _buildCategoryRow('Career', 892, Icons.work_rounded),
-                  const Divider(height: AppSpacing.lg),
-                  _buildCategoryRow('Finance', 756, Icons.account_balance_rounded),
-                  const Divider(height: AppSpacing.lg),
-                  _buildCategoryRow('Health', 634, Icons.favorite_rounded),
-                  const Divider(height: AppSpacing.lg),
-                  _buildCategoryRow('Education', 521, Icons.school_rounded),
-                  const Divider(height: AppSpacing.lg),
-                  _buildCategoryRow('Relationships', 489, Icons.people_rounded),
-                ],
+                children: _popularCategories.isEmpty
+                    ? [const Text('No decision categories yet')]
+                    : _popularCategories.map((row) {
+                        return Column(
+                          children: [
+                            _buildCategoryRow(
+                              row['name']?.toString() ?? 'Other',
+                              _asInt(row['count']),
+                              _categoryIcon(row['name']?.toString()),
+                            ),
+                            const Divider(height: AppSpacing.lg),
+                          ],
+                        );
+                      }).toList(),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> get _userGrowth =>
+      List<Map<String, dynamic>>.from(_analytics['user_growth'] ?? []);
+
+  List<Map<String, dynamic>> get _activityByHour =>
+      List<Map<String, dynamic>>.from(_analytics['activity_by_hour'] ?? []);
+
+  List<Map<String, dynamic>> get _popularCategories =>
+      List<Map<String, dynamic>>.from(_analytics['popular_categories'] ?? []);
+
+  int _metricInt(String key) => _asInt(_analytics[key]);
+
+  double _metricDouble(String key) =>
+      _asDouble(_analytics[key]);
+
+  double _asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
+  String _changeLabel(String key) {
+    final value = _metricDouble(key);
+    if (value == 0) return '';
+    return '${value > 0 ? '+' : ''}${value.toStringAsFixed(0)}%';
+  }
+
+  List<FlSpot> get _userGrowthSpots {
+    if (_userGrowth.isEmpty) return [const FlSpot(0, 0)];
+    return _userGrowth.asMap().entries.map((entry) {
+      return FlSpot(
+        entry.key.toDouble(),
+        _asDouble(entry.value['count']),
+      );
+    }).toList();
+  }
+
+  double _maxLineY(List<Map<String, dynamic>> rows, String key) {
+    final values = rows
+        .map((row) => _asDouble(row[key]))
+        .toList();
+    if (values.isEmpty) return 1;
+    final maxValue = values.reduce((a, b) => a > b ? a : b);
+    return maxValue <= 0 ? 1 : maxValue + 1;
+  }
+
+  int _asInt(dynamic value) {
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.screenPadding),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_error!, textAlign: TextAlign.center),
+            const SizedBox(height: AppSpacing.md),
+            ElevatedButton(
+              onPressed: _loadAnalytics,
+              child: const Text('Retry'),
             ),
           ],
         ),
@@ -319,23 +396,24 @@ class _UserAnalyticsScreenState extends State<UserAnalyticsScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Icon(icon, color: color, size: 24),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.xs,
-                  vertical: AppSpacing.xxs,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.successLight,
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-                ),
-                child: Text(
-                  change,
-                  style: AppTypography.labelSmall.copyWith(
-                    color: AppColors.success,
-                    fontWeight: FontWeight.w600,
+              if (change.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xs,
+                    vertical: AppSpacing.xxs,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.successLight,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                  ),
+                  child: Text(
+                    change,
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.success,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -348,43 +426,6 @@ class _UserAnalyticsScreenState extends State<UserAnalyticsScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildDemographicRow(String label, double percentage, String percentText) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 50,
-          child: Text(
-            label,
-            style: AppTypography.labelMedium,
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-            child: LinearProgressIndicator(
-              value: percentage,
-              backgroundColor: AppColors.surfaceVariant,
-              valueColor: const AlwaysStoppedAnimation(AppColors.primary),
-              minHeight: 8,
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        SizedBox(
-          width: 40,
-          child: Text(
-            percentText,
-            style: AppTypography.labelSmall.copyWith(
-              color: AppColors.textSecondary,
-            ),
-            textAlign: TextAlign.right,
-          ),
-        ),
-      ],
     );
   }
 
@@ -412,5 +453,23 @@ class _UserAnalyticsScreenState extends State<UserAnalyticsScreen> {
         ),
       ],
     );
+  }
+
+  IconData _categoryIcon(String? label) {
+    switch ((label ?? '').toLowerCase()) {
+      case 'career':
+        return Icons.work_rounded;
+      case 'finance':
+        return Icons.account_balance_rounded;
+      case 'health':
+        return Icons.favorite_rounded;
+      case 'education':
+        return Icons.school_rounded;
+      case 'relationship':
+      case 'relationships':
+        return Icons.people_rounded;
+      default:
+        return Icons.category_rounded;
+    }
   }
 }

@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../../services/api_service.dart';
 import '../../theme/app_tokens.dart';
 import '../../utils/export_helpers.dart';
 import '../../widgets/custom_app_bar.dart';
@@ -19,6 +20,50 @@ class FeedbackAnalyticsScreen extends StatefulWidget {
 
 class _FeedbackAnalyticsScreenState extends State<FeedbackAnalyticsScreen> {
   String _selectedPeriod = '30 days';
+  bool _isLoading = true;
+  String? _error;
+  Map<String, dynamic> _stats = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStats();
+  }
+
+  int? get _selectedDays {
+    switch (_selectedPeriod) {
+      case '7 days':
+        return 7;
+      case '30 days':
+        return 30;
+      case '90 days':
+        return 90;
+      default:
+        return null;
+    }
+  }
+
+  Future<void> _loadStats() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    final response = await ApiService.getFeedbackStats(days: _selectedDays);
+    if (!mounted) return;
+
+    if (response.isSuccess) {
+      setState(() {
+        _stats = Map<String, dynamic>.from(response.data);
+        _isLoading = false;
+      });
+    } else {
+      setState(() {
+        _error = response.error ?? 'Failed to load feedback analytics';
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +80,7 @@ class _FeedbackAnalyticsScreenState extends State<FeedbackAnalyticsScreen> {
                 {
                   'period': _selectedPeriod,
                   'exported_at': DateTime.now().toIso8601String(),
-                  'summary': 'Feedback analytics snapshot',
+                  'analytics': _stats,
                 },
               ]);
               if (!context.mounted) return;
@@ -48,7 +93,11 @@ class _FeedbackAnalyticsScreenState extends State<FeedbackAnalyticsScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? _buildErrorState()
+              : SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.screenPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -68,6 +117,7 @@ class _FeedbackAnalyticsScreenState extends State<FeedbackAnalyticsScreen> {
                       onSelected: (selected) {
                         if (selected) {
                           setState(() => _selectedPeriod = period);
+                          _loadStats();
                         }
                       },
                       backgroundColor: AppColors.surface,
@@ -93,8 +143,8 @@ class _FeedbackAnalyticsScreenState extends State<FeedbackAnalyticsScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      const Text(
-                        '4.6',
+                      Text(
+                        _averageRating.toStringAsFixed(1),
                         style: TextStyle(
                           fontSize: 56,
                           fontWeight: FontWeight.bold,
@@ -114,38 +164,19 @@ class _FeedbackAnalyticsScreenState extends State<FeedbackAnalyticsScreen> {
                     ],
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  const StarRating(rating: 4.6, size: 32),
+                  StarRating(rating: _averageRating, size: 32),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
-                    'Based on 1,247 reviews',
+                    'Based on $_totalRatings ratings',
                     style: AppTypography.bodySmall.copyWith(
                       color: AppColors.textSecondary,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                      vertical: AppSpacing.xxs,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.successLight,
-                      borderRadius:
-                          BorderRadius.circular(AppSpacing.radiusFull),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.trending_up_rounded,
-                            size: 16, color: AppColors.success),
-                        const SizedBox(width: AppSpacing.xxs),
-                        Text(
-                          '+0.3 from last period',
-                          style: AppTypography.labelSmall.copyWith(
-                            color: AppColors.success,
-                          ),
-                        ),
-                      ],
+                  Text(
+                    '${_positivePercentage.round()}% positive ratings',
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.success,
                     ),
                   ),
                 ],
@@ -160,15 +191,18 @@ class _FeedbackAnalyticsScreenState extends State<FeedbackAnalyticsScreen> {
               padding: const EdgeInsets.all(AppSpacing.md),
               child: Column(
                 children: [
-                  _buildRatingBar(5, 0.65, 812),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildRatingBar(4, 0.22, 275),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildRatingBar(3, 0.08, 100),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildRatingBar(2, 0.03, 37),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildRatingBar(1, 0.02, 23),
+                  if (_ratingDistribution.isEmpty)
+                    const Text('No rating data available')
+                  else
+                    ..._ratingDistribution.map((row) => Padding(
+                          padding:
+                              const EdgeInsets.only(bottom: AppSpacing.sm),
+                          child: _buildRatingBar(
+                            _asInt(row['stars']),
+                            _asDouble(row['percentage']),
+                            _asInt(row['count']),
+                          ),
+                        )),
                 ],
               ),
             ),
@@ -215,13 +249,13 @@ class _FeedbackAnalyticsScreenState extends State<FeedbackAnalyticsScreen> {
                         sideTitles: SideTitles(
                           showTitles: true,
                           getTitlesWidget: (value, meta) {
-                            final weeks = ['W1', 'W2', 'W3', 'W4'];
                             if (value.toInt() >= 0 &&
-                                value.toInt() < weeks.length) {
+                                value.toInt() < _trends.length) {
                               return Padding(
                                 padding: const EdgeInsets.only(top: 8),
                                 child: Text(
-                                  weeks[value.toInt()],
+                                  _trends[value.toInt()]['label']?.toString() ??
+                                      '',
                                   style: AppTypography.labelSmall.copyWith(
                                     color: AppColors.textTertiary,
                                   ),
@@ -240,12 +274,7 @@ class _FeedbackAnalyticsScreenState extends State<FeedbackAnalyticsScreen> {
                     borderData: FlBorderData(show: false),
                     lineBarsData: [
                       LineChartBarData(
-                        spots: const [
-                          FlSpot(0, 4.3),
-                          FlSpot(1, 4.4),
-                          FlSpot(2, 4.5),
-                          FlSpot(3, 4.6),
-                        ],
+                        spots: _trendSpots,
                         isCurved: true,
                         color: AppColors.primary,
                         barWidth: 3,
@@ -282,15 +311,19 @@ class _FeedbackAnalyticsScreenState extends State<FeedbackAnalyticsScreen> {
               padding: const EdgeInsets.all(AppSpacing.md),
               child: Column(
                 children: [
-                  _buildCategoryRating('General Feedback', 4.7, 523),
-                  const Divider(height: AppSpacing.lg),
-                  _buildCategoryRating('AI Suggestions', 4.5, 312),
-                  const Divider(height: AppSpacing.lg),
-                  _buildCategoryRating('User Interface', 4.6, 256),
-                  const Divider(height: AppSpacing.lg),
-                  _buildCategoryRating('Feature Requests', 4.2, 98),
-                  const Divider(height: AppSpacing.lg),
-                  _buildCategoryRating('Bug Reports', 3.8, 58),
+                  if (_categorySummary.isEmpty)
+                    const Text('No feedback categories yet')
+                  else
+                    ..._categorySummary.map((row) => Column(
+                          children: [
+                            _buildCategoryRating(
+                              row['label']?.toString() ?? 'Other',
+                              _asDouble(row['average_rating']),
+                              _asInt(row['count']),
+                            ),
+                            const Divider(height: AppSpacing.lg),
+                          ],
+                        )),
                 ],
               ),
             ),
@@ -308,7 +341,61 @@ class _FeedbackAnalyticsScreenState extends State<FeedbackAnalyticsScreen> {
               ],
             ),
             const SizedBox(height: AppSpacing.sm),
-            ..._buildRecentFeedback(),
+            if (_recentFeedback.isEmpty)
+              const AppCard(
+                child: Center(child: Text('No feedback yet')),
+              )
+            else
+              ..._recentFeedback.map(_buildFeedbackCard),
+          ],
+        ),
+      ),
+    );
+  }
+
+  double get _averageRating =>
+      _asDouble(_stats['average_rating']);
+
+  int get _totalRatings => _asInt(_stats['total_app_ratings']);
+
+  double get _positivePercentage =>
+      _asDouble(_stats['positive_percentage']);
+
+  List<Map<String, dynamic>> get _ratingDistribution =>
+      List<Map<String, dynamic>>.from(_stats['rating_distribution'] ?? []);
+
+  List<Map<String, dynamic>> get _trends =>
+      List<Map<String, dynamic>>.from(_stats['trends'] ?? []);
+
+  List<Map<String, dynamic>> get _categorySummary =>
+      List<Map<String, dynamic>>.from(_stats['category_summary'] ?? []);
+
+  List<Map<String, dynamic>> get _recentFeedback =>
+      List<Map<String, dynamic>>.from(_stats['recent_feedback'] ?? []);
+
+  List<FlSpot> get _trendSpots {
+    if (_trends.isEmpty) return [const FlSpot(0, 0)];
+    return _trends.asMap().entries.map((entry) {
+      return FlSpot(
+        entry.key.toDouble(),
+        _asDouble(entry.value['average_rating']),
+      );
+    }).toList();
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.screenPadding),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_error!, textAlign: TextAlign.center),
+            const SizedBox(height: AppSpacing.md),
+            ElevatedButton(
+              onPressed: _loadStats,
+              child: const Text('Retry'),
+            ),
           ],
         ),
       ),
@@ -386,37 +473,15 @@ class _FeedbackAnalyticsScreenState extends State<FeedbackAnalyticsScreen> {
     );
   }
 
-  List<Widget> _buildRecentFeedback() {
-    final feedback = [
-      _FeedbackItem(
-        name: 'Sarah J.',
-        rating: 5,
-        comment:
-            'Love the AI recommendations! They\'ve helped me make better decisions.',
-        date: '2 hours ago',
-        category: 'AI Suggestions',
-      ),
-      _FeedbackItem(
-        name: 'Michael C.',
-        rating: 4,
-        comment: 'Great app overall. Would love to see more factor templates.',
-        date: '5 hours ago',
-        category: 'Feature Request',
-      ),
-      _FeedbackItem(
-        name: 'Emma W.',
-        rating: 5,
-        comment:
-            'The journal feature is fantastic for tracking my past decisions.',
-        date: '1 day ago',
-        category: 'General',
-      ),
-    ];
-
-    return feedback.map((item) => _buildFeedbackCard(item)).toList();
-  }
-
-  Widget _buildFeedbackCard(_FeedbackItem item) {
+  Widget _buildFeedbackCard(Map<String, dynamic> item) {
+    final email = item['user_email']?.toString() ?? '';
+    final name = email.isNotEmpty ? email.split('@').first : 'User';
+    final rating = _asDouble(item['rating']);
+    final comment = item['description']?.toString() ??
+        item['title']?.toString() ??
+        'No comment provided';
+    final category = item['category']?.toString() ?? 'other';
+    final createdAt = item['created_at']?.toString();
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: AppCard(
@@ -430,7 +495,7 @@ class _FeedbackAnalyticsScreenState extends State<FeedbackAnalyticsScreen> {
                   radius: 18,
                   backgroundColor: AppColors.primarySurface,
                   child: Text(
-                    item.name[0],
+                    name.isNotEmpty ? name[0].toUpperCase() : 'U',
                     style: AppTypography.labelMedium.copyWith(
                       color: AppColors.primary,
                     ),
@@ -441,8 +506,8 @@ class _FeedbackAnalyticsScreenState extends State<FeedbackAnalyticsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(item.name, style: AppTypography.labelMedium),
-                      StarRating(rating: item.rating.toDouble(), size: 14),
+                      Text(name, style: AppTypography.labelMedium),
+                      StarRating(rating: rating, size: 14),
                     ],
                   ),
                 ),
@@ -456,7 +521,7 @@ class _FeedbackAnalyticsScreenState extends State<FeedbackAnalyticsScreen> {
                     borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
                   ),
                   child: Text(
-                    item.category,
+                    category,
                     style: AppTypography.labelSmall.copyWith(
                       color: AppColors.textSecondary,
                       fontSize: 10,
@@ -467,12 +532,12 @@ class _FeedbackAnalyticsScreenState extends State<FeedbackAnalyticsScreen> {
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              item.comment,
+              comment,
               style: AppTypography.bodyMedium,
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              item.date,
+              _formatTime(createdAt),
               style: AppTypography.labelSmall.copyWith(
                 color: AppColors.textTertiary,
               ),
@@ -482,20 +547,29 @@ class _FeedbackAnalyticsScreenState extends State<FeedbackAnalyticsScreen> {
       ),
     );
   }
-}
 
-class _FeedbackItem {
-  final String name;
-  final int rating;
-  final String comment;
-  final String date;
-  final String category;
+  String _formatTime(String? dateStr) {
+    if (dateStr == null) return '';
+    try {
+      final diff = DateTime.now().difference(DateTime.parse(dateStr));
+      if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+      if (diff.inHours < 24) return '${diff.inHours} hours ago';
+      if (diff.inDays < 7) return '${diff.inDays} days ago';
+      return '${(diff.inDays / 7).floor()} weeks ago';
+    } catch (_) {
+      return '';
+    }
+  }
 
-  _FeedbackItem({
-    required this.name,
-    required this.rating,
-    required this.comment,
-    required this.date,
-    required this.category,
-  });
+  int _asInt(dynamic value) {
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
+  double _asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
 }

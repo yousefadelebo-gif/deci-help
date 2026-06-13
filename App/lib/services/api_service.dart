@@ -17,6 +17,7 @@ class ApiService {
 
   // Persistent HTTP client for connection pooling
   static final http.Client _client = http.Client();
+  static final Map<String, _CachedApiResponse> _getCache = {};
 
   static String? _accessToken;
   static String? _refreshToken;
@@ -129,6 +130,21 @@ class ApiService {
     } catch (e) {
       return ApiResponse.error(e.toString());
     }
+  }
+
+  static Future<ApiResponse> getCached(
+    String endpoint, {
+    Duration maxAge = const Duration(seconds: 30),
+  }) async {
+    final cached = _getCache[endpoint];
+    if (cached != null && DateTime.now().difference(cached.createdAt) < maxAge) {
+      return cached.response;
+    }
+    final response = await get(endpoint);
+    if (response.isSuccess) {
+      _getCache[endpoint] = _CachedApiResponse(response, DateTime.now());
+    }
+    return response;
   }
 
   static Future<ApiResponse> post(
@@ -312,7 +328,11 @@ class ApiService {
   // ==================== ADMIN ENDPOINTS ====================
 
   static Future<ApiResponse> getAdminStats() async {
-    return get('/auth/admin/stats/');
+    return getCached('/auth/admin/stats/');
+  }
+
+  static Future<ApiResponse> getAdminUserAnalytics() async {
+    return getCached('/auth/admin/user-analytics/');
   }
 
   static Future<ApiResponse> getAdminUsers(
@@ -327,8 +347,9 @@ class ApiService {
     return get('/feedback/admin/list/');
   }
 
-  static Future<ApiResponse> getFeedbackStats() async {
-    return get('/feedback/admin/stats/');
+  static Future<ApiResponse> getFeedbackStats({int? days}) async {
+    return getCached(
+        '/feedback/admin/stats/${days != null ? '?days=$days' : ''}');
   }
 
   // ==================== DECISIONS ENDPOINTS ====================
@@ -433,7 +454,7 @@ class ApiService {
   // ==================== FACTORS ENDPOINTS ====================
 
   static Future<ApiResponse> getFactorCategories() async {
-    return get('/factors/categories/');
+    return getCached('/factors/categories/', maxAge: const Duration(minutes: 5));
   }
 
   static Future<ApiResponse> getFactorCategory(String id) async {
@@ -562,6 +583,13 @@ class ApiService {
       if (comment != null && comment.isNotEmpty) 'comment': comment,
     });
   }
+}
+
+class _CachedApiResponse {
+  final ApiResponse response;
+  final DateTime createdAt;
+
+  _CachedApiResponse(this.response, this.createdAt);
 }
 
 /// API Response wrapper

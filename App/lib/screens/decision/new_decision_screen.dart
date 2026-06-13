@@ -870,10 +870,13 @@ class _NewDecisionScreenState extends State<NewDecisionScreen>
 
           // Decision Title Section with enhanced styling
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Text(
-                'What decision are you making?',
-                style: AppTypography.h3,
+              Expanded(
+                child: Text(
+                  'What decision are you making?',
+                  style: AppTypography.h3,
+                ),
               ),
               const SizedBox(width: 8),
               Container(
@@ -1697,61 +1700,7 @@ class _NewDecisionScreenState extends State<NewDecisionScreen>
   }
 
   Widget _buildFactorsTab() {
-    // Default Quick Add factor options (used as fallback)
-    final defaultFactors = [
-      {
-        'name': 'Price',
-        'icon': Icons.attach_money_rounded,
-        'color': const Color(0xFF4CAF50),
-        'bgColor': const Color(0xFFE8F5E9)
-      },
-      {
-        'name': 'Quality',
-        'icon': Icons.star_outline_rounded,
-        'color': const Color(0xFFD4A600),
-        'bgColor': const Color(0xFFFFF9C4)
-      },
-      {
-        'name': 'Time Required',
-        'icon': Icons.access_time_rounded,
-        'color': const Color(0xFF00897B),
-        'bgColor': const Color(0xFFE0F2F1)
-      },
-      {
-        'name': 'Risk Level',
-        'icon': Icons.warning_amber_rounded,
-        'color': const Color(0xFFE57373),
-        'bgColor': const Color(0xFFFFEBEE)
-      },
-      {
-        'name': 'Difficulty',
-        'icon': Icons.track_changes_rounded,
-        'color': const Color(0xFF00897B),
-        'bgColor': const Color(0xFFE0F2F1)
-      },
-      {
-        'name': 'Convenience',
-        'icon': Icons.bolt_rounded,
-        'color': const Color(0xFFD4A600),
-        'bgColor': const Color(0xFFFFF9C4)
-      },
-      {
-        'name': 'Long-term Benefit',
-        'icon': Icons.trending_up_rounded,
-        'color': const Color(0xFF4CAF50),
-        'bgColor': const Color(0xFFE8F5E9)
-      },
-      {
-        'name': 'Personal Preference',
-        'icon': Icons.favorite_outline_rounded,
-        'color': const Color(0xFFE57373),
-        'bgColor': const Color(0xFFFFEBEE)
-      },
-    ];
-
-    // Use AI suggestions if available, otherwise use defaults
-    final quickAddFactors =
-        _aiFactorSuggestions.isNotEmpty ? _aiFactorSuggestions : defaultFactors;
+    final quickAddFactors = _aiFactorSuggestions;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppSpacing.screenPadding),
@@ -1800,7 +1749,7 @@ class _NewDecisionScreenState extends State<NewDecisionScreen>
               Text(
                 _aiFactorSuggestions.isNotEmpty
                     ? 'AI Suggested Factors'
-                    : 'Quick Add',
+                    : 'Suggested Factors',
                 style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
@@ -1823,26 +1772,40 @@ class _NewDecisionScreenState extends State<NewDecisionScreen>
           ),
           const SizedBox(height: 12),
 
-          // Quick Add Grid - 2 columns with flexible height
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: quickAddFactors.map((factor) {
-              final isSelected =
-                  _selectedFactors.any((f) => f.name == factor['name']);
-              return SizedBox(
-                width: (MediaQuery.of(context).size.width - 48 - 12) / 2,
-                child: _buildQuickAddButton(
-                  name: factor['name'] as String,
-                  icon: factor['icon'] as IconData,
-                  color: factor['color'] as Color,
-                  bgColor: factor['bgColor'] as Color,
-                  isSelected: isSelected,
-                  onTap: () => _toggleQuickAddFactor(factor),
-                ),
-              );
-            }).toList(),
-          ),
+          if (quickAddFactors.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: Text(
+                'No suggested factors yet. Add a custom factor below.',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            )
+          else
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: quickAddFactors.map((factor) {
+                final isSelected =
+                    _selectedFactors.any((f) => f.name == factor['name']);
+                return SizedBox(
+                  width: (MediaQuery.of(context).size.width - 48 - 12) / 2,
+                  child: _buildQuickAddButton(
+                    name: factor['name'] as String,
+                    icon: factor['icon'] as IconData,
+                    color: factor['color'] as Color,
+                    bgColor: factor['bgColor'] as Color,
+                    isSelected: isSelected,
+                    onTap: () => _toggleQuickAddFactor(factor),
+                  ),
+                );
+              }).toList(),
+            ),
           const SizedBox(height: 32),
 
           // Or Create Custom Section

@@ -4,22 +4,31 @@ import 'package:flutter/foundation.dart';
 class ApiConstants {
   ApiConstants._();
 
-  // Base URLs - auto-detect platform
+  /// PC LAN IP running Django. Override: --dart-define=DEV_API_HOST=192.168.x.x
+  static const String devApiHost = String.fromEnvironment(
+    'DEV_API_HOST',
+    defaultValue: '192.168.1.6',
+  );
+
+  /// Android emulator only: --dart-define=USE_EMULATOR_HOST=true
+  static const bool useEmulatorHost = bool.fromEnvironment(
+    'USE_EMULATOR_HOST',
+    defaultValue: false,
+  );
+
+  // Base URLs - physical Android uses LAN IP; emulator uses 10.0.2.2
   static String get baseUrl {
     if (kIsWeb) {
       return 'http://localhost:8000/api/v1';
     }
 
-    // Android Emulator uses 10.0.2.2 to access host's localhost
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return 'http://10.0.2.2:8000/api/v1';
+        final host = useEmulatorHost ? '10.0.2.2' : devApiHost;
+        return 'http://$host:8000/api/v1';
       default:
         return 'http://localhost:8000/api/v1';
     }
-
-    // For physical device, use your computer's IP: 'http://192.168.x.x:8000/api/v1'
-    // For production: 'https://your-domain.com/api/v1'
   }
   // static const String baseUrl = 'https://your-domain.com/api/v1'; // Production
 

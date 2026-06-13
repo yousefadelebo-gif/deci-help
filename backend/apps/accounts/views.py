@@ -128,36 +128,36 @@ class AdminStatsView(APIView):
     
     def get(self, request):
         from django.utils import timezone
-        from datetime import timedelta
+        from datetime import datetime, timedelta
         from django.db.models import Count, Avg
-        from django.db.models.functions import TruncDate
-        from apps.decisions.models import Decision
-        from apps.feedback.models import AppRating
+        from django.db.models.functions import ExtractHour
+        from apps.decisions.models import Decision, JournalEntry
+        from apps.feedback.models import AppRating, UserFeedback, AIFeedback
         
         today = timezone.now().date()
-        week_ago = today - timedelta(days=7)
         month_ago = today - timedelta(days=30)
+        previous_month_start = month_ago - timedelta(days=30)
         
         # User stats - use created_at instead of date_joined
         total_users = User.objects.count()
         users_today = User.objects.filter(last_login_at__date=today).count()
         new_users_this_month = User.objects.filter(created_at__date__gte=month_ago).count()
         new_users_last_month = User.objects.filter(
-            created_at__date__gte=month_ago - timedelta(days=30),
+            created_at__date__gte=previous_month_start,
             created_at__date__lt=month_ago
         ).count()
         
         # Calculate user growth percentage
         if new_users_last_month > 0:
-            user_growth = ((new_users_this_month - new_users_last_month) / new_users_last_month) * 100
+            user_growth_rate = ((new_users_this_month - new_users_last_month) / new_users_last_month) * 100
         else:
-            user_growth = 100 if new_users_this_month > 0 else 0
+            user_growth_rate = 100 if new_users_this_month > 0 else 0
         
         # Decision stats
         total_decisions = Decision.objects.count()
         decisions_this_month = Decision.objects.filter(created_at__date__gte=month_ago).count()
         decisions_last_month = Decision.objects.filter(
-            created_at__date__gte=month_ago - timedelta(days=30),
+            created_at__date__gte=previous_month_start,
             created_at__date__lt=month_ago
         ).count()
         
@@ -203,8 +203,48 @@ class AdminStatsView(APIView):
                 'percentage': percentage,
             })
         
-        # Rating stats
-        avg_rating = AppRating.objects.aggregate(avg=Avg('rating'))['avg'] or 4.5
+        # Rating and usage stats
+        avg_rating = AppRating.objects.aggregate(avg=Avg('rating'))['avg'] or 0
+        active_users = User.objects.filter(last_login_at__date__gte=month_ago).count()
+        total_feedback = UserFeedback.objects.count()
+        journal_entries = JournalEntry.objects.count()
+        ai_analyses = Decision.objects.exclude(analyzed_at__isnull=True).count()
+        ai_feedback_total = AIFeedback.objects.count()
+        ai_feedback_helpful = AIFeedback.objects.filter(was_helpful=True).count()
+        ai_success_rate = (
+            round((ai_feedback_helpful / ai_feedback_total) * 100, 1)
+            if ai_feedback_total else 0
+        )
+        completed_decisions = Decision.objects.filter(status='completed').count()
+        completion_rate = (
+            round((completed_decisions / total_decisions) * 100, 1)
+            if total_decisions else 0
+        )
+
+        # User growth (last 7 days)
+        user_growth_series = []
+        for i in range(6, -1, -1):
+            day = today - timedelta(days=i)
+            user_growth_series.append({
+                'label': day.strftime('%a'),
+                'count': User.objects.filter(created_at__date=day).count(),
+            })
+
+        # Activity by hour from real decision creation timestamps
+        activity_by_hour = []
+        hourly_counts = {
+            item['hour']: item['count']
+            for item in Decision.objects.filter(created_at__date__gte=month_ago)
+            .annotate(hour=ExtractHour('created_at'))
+            .values('hour')
+            .annotate(count=Count('id'))
+        }
+        for hour in range(0, 24, 2):
+            activity_by_hour.append({
+                'hour': hour,
+                'label': datetime(2000, 1, 1, hour).strftime('%I%p').lstrip('0').lower(),
+                'count': hourly_counts.get(hour, 0) + hourly_counts.get(hour + 1, 0),
+            })
         
         # Recent users (last 10) - use created_at and name instead of date_joined and first_name/last_name
         recent_users = User.objects.order_by('-created_at')[:10].values(
@@ -226,13 +266,46 @@ class AdminStatsView(APIView):
         return Response({
             'total_users': total_users,
             'active_today': users_today,
-            'user_growth': round(user_growth, 1),
+            'active_users': active_users,
+            'new_users': new_users_this_month,
+            'user_growth': round(user_growth_rate, 1),
             'total_decisions': total_decisions,
+            'decisions_created': total_decisions,
             'decision_growth': round(decision_growth, 1),
             'avg_rating': round(avg_rating, 1),
+            'feedback_count': total_feedback,
+            'journal_entries': journal_entries,
+            'ai_analyses': ai_analyses,
+            'ai_requests': ai_analyses,
+            'ai_success_rate': ai_success_rate,
+            'completion_rate': completion_rate,
             'weekly_activity': weekly_activity,
+            'user_growth_series': user_growth_series,
+            'activity_by_hour': activity_by_hour,
             'decision_categories': decision_categories,
             'recent_users': recent_users_list,
+        })
+
+
+class AdminUserAnalyticsView(APIView):
+    """Admin user analytics from database records."""
+
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        stats_response = AdminStatsView().get(request).data
+        return Response({
+            'new_users': stats_response['new_users'],
+            'active_users': stats_response['active_users'],
+            'user_growth_rate': stats_response['user_growth'],
+            'retention_rate': (
+                round((stats_response['active_users'] / stats_response['total_users']) * 100, 1)
+                if stats_response['total_users'] else 0
+            ),
+            'average_session_minutes': 0,
+            'user_growth': stats_response['user_growth_series'],
+            'activity_by_hour': stats_response['activity_by_hour'],
+            'popular_categories': stats_response['decision_categories'],
         })
 
 

@@ -6,6 +6,8 @@ from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db.models import Count, Avg
+from django.utils import timezone
+from datetime import timedelta
 
 from .models import UserFeedback, AppRating, AIFeedback
 from .serializers import (
@@ -130,7 +132,7 @@ class AdminFeedbackListView(generics.ListAPIView):
     permission_classes = [permissions.IsAdminUser]
     
     def get_queryset(self):
-        queryset = UserFeedback.objects.all()
+        queryset = UserFeedback.objects.select_related('user').all()
         
         # Filter by status
         status_filter = self.request.query_params.get('status')
@@ -164,40 +166,122 @@ class FeedbackStatsView(APIView):
     permission_classes = [permissions.IsAdminUser]
     
     def get(self, request):
+        days = request.query_params.get('days')
+        queryset = UserFeedback.objects.all()
+        ratings_queryset = AppRating.objects.all()
+        ai_queryset = AIFeedback.objects.all()
+        if days:
+            try:
+                since = timezone.now() - timedelta(days=int(days))
+                queryset = queryset.filter(created_at__gte=since)
+                ratings_queryset = ratings_queryset.filter(created_at__gte=since)
+                ai_queryset = ai_queryset.filter(created_at__gte=since)
+            except (TypeError, ValueError):
+                pass
+
         total = UserFeedback.objects.count()
+        period_total = queryset.count()
         
         by_category = dict(
-            UserFeedback.objects.values('category').annotate(
+            queryset.values('category').annotate(
                 count=Count('id')
             ).values_list('category', 'count')
         )
         
         by_status = dict(
-            UserFeedback.objects.values('status').annotate(
+            queryset.values('status').annotate(
                 count=Count('id')
             ).values_list('status', 'count')
         )
         
-        avg_rating = AppRating.objects.aggregate(avg=Avg('rating'))['avg'] or 0
+        combined_rating_values = [
+            *ratings_queryset.values_list('rating', flat=True),
+            *queryset.exclude(rating__isnull=True).values_list('rating', flat=True),
+        ]
+        avg_rating = (
+            sum(combined_rating_values) / len(combined_rating_values)
+            if combined_rating_values else 0
+        )
         
         # AI helpfulness
-        ai_total = AIFeedback.objects.count()
-        ai_helpful = AIFeedback.objects.filter(was_helpful=True).count()
+        ai_total = ai_queryset.count()
+        ai_helpful = ai_queryset.filter(was_helpful=True).count()
         ai_rate = (ai_helpful / ai_total * 100) if ai_total > 0 else 0
         
         # Calculate positive percentage (4+ stars)
-        total_ratings = AppRating.objects.count()
-        positive_ratings = AppRating.objects.filter(rating__gte=4).count()
+        total_ratings = len(combined_rating_values)
+        positive_ratings = len([rating for rating in combined_rating_values if rating >= 4])
         positive_percent = (positive_ratings / total_ratings * 100) if total_ratings > 0 else 0
+
+        rating_distribution = []
+        for stars in range(5, 0, -1):
+            count = len([rating for rating in combined_rating_values if int(rating) == stars])
+            rating_distribution.append({
+                'stars': stars,
+                'count': count,
+                'percentage': round((count / total_ratings) if total_ratings else 0, 4),
+            })
+
+        trends = []
+        for i in range(3, -1, -1):
+            end = timezone.now() - timedelta(days=i * 7)
+            start = end - timedelta(days=7)
+            feedback_ratings = list(
+                UserFeedback.objects.filter(
+                    created_at__gte=start,
+                    created_at__lt=end,
+                    rating__isnull=False,
+                ).values_list('rating', flat=True)
+            )
+            app_ratings = list(
+                AppRating.objects.filter(
+                    created_at__gte=start,
+                    created_at__lt=end,
+                ).values_list('rating', flat=True)
+            )
+            values = feedback_ratings + app_ratings
+            trends.append({
+                'label': f'W{4 - i}',
+                'average_rating': round((sum(values) / len(values)) if values else 0, 2),
+                'count': len(values),
+            })
+
+        category_summary = []
+        category_labels = dict(UserFeedback.CATEGORY_CHOICES)
+        for category, count in by_category.items():
+            category_qs = queryset.filter(category=category)
+            category_ratings = list(
+                category_qs.exclude(rating__isnull=True).values_list('rating', flat=True)
+            )
+            category_summary.append({
+                'category': category,
+                'label': category_labels.get(category, category or 'Other'),
+                'count': count,
+                'average_rating': round(
+                    (sum(category_ratings) / len(category_ratings))
+                    if category_ratings else 0,
+                    2,
+                ),
+            })
+
+        recent_feedback = UserFeedbackAdminSerializer(
+            queryset.select_related('user').order_by('-created_at')[:10],
+            many=True,
+        ).data
         
         return Response({
             'total_count': total,
             'total_feedback': total,
+            'period_feedback': period_total,
             'by_category': by_category,
             'by_status': by_status,
-            'average_rating': round(avg_rating, 2) or 4.5,
-            'positive_percentage': round(positive_percent) or 94,
+            'average_rating': round(avg_rating, 2),
+            'positive_percentage': round(positive_percent),
             'ai_helpfulness_rate': round(ai_rate, 2),
             'total_ai_feedbacks': ai_total,
-            'total_app_ratings': total_ratings
+            'total_app_ratings': total_ratings,
+            'rating_distribution': rating_distribution,
+            'trends': trends,
+            'category_summary': category_summary,
+            'recent_feedback': recent_feedback,
         })

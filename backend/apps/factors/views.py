@@ -6,7 +6,7 @@ from rest_framework import generics, status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.db.models import F
+from django.db.models import F, Prefetch
 
 from .models import FactorCategory, FactorTemplate, UserFactorTemplate
 from .serializers import (
@@ -22,7 +22,13 @@ class FactorCategoryListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        return FactorCategory.objects.filter(is_active=True).order_by('order')
+        return FactorCategory.objects.filter(is_active=True).prefetch_related(
+            Prefetch(
+                'templates',
+                queryset=FactorTemplate.objects.filter(is_active=True).order_by('-usage_count', 'name'),
+                to_attr='active_templates',
+            )
+        ).order_by('order')
 
 
 class FactorCategoryDetailView(generics.RetrieveAPIView):

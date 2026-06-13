@@ -34,31 +34,38 @@ class AppBottomNavigation extends StatelessWidget {
             vertical: AppSpacing.xs,
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _NavItem(
-                icon: Icons.dashboard_rounded,
-                label: 'Dashboard',
-                isSelected: currentIndex == 0,
-                onTap: () => onTap(0),
+              Expanded(
+                child: _NavItem(
+                  icon: Icons.dashboard_rounded,
+                  label: 'Dashboard',
+                  isSelected: currentIndex == 0,
+                  onTap: () => onTap(0),
+                ),
               ),
-              _NavItem(
-                icon: Icons.add_circle_outline_rounded,
-                label: 'New Decision',
-                isSelected: currentIndex == 1,
-                onTap: () => onTap(1),
+              Expanded(
+                child: _NavItem(
+                  icon: Icons.add_circle_outline_rounded,
+                  label: 'New',
+                  isSelected: currentIndex == 1,
+                  onTap: () => onTap(1),
+                ),
               ),
-              _NavItem(
-                icon: Icons.book_rounded,
-                label: 'Journal',
-                isSelected: currentIndex == 2,
-                onTap: () => onTap(2),
+              Expanded(
+                child: _NavItem(
+                  icon: Icons.book_rounded,
+                  label: 'Journal',
+                  isSelected: currentIndex == 2,
+                  onTap: () => onTap(2),
+                ),
               ),
-              _NavItem(
-                icon: Icons.person_rounded,
-                label: 'Profile',
-                isSelected: currentIndex == 3,
-                onTap: () => onTap(3),
+              Expanded(
+                child: _NavItem(
+                  icon: Icons.person_rounded,
+                  label: 'Profile',
+                  isSelected: currentIndex == 3,
+                  onTap: () => onTap(3),
+                ),
               ),
             ],
           ),
@@ -89,7 +96,7 @@ class _NavItem extends StatelessWidget {
       child: AnimatedContainer(
         duration: AppDurations.fast,
         padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
+          horizontal: AppSpacing.xs,
           vertical: AppSpacing.xs,
         ),
         decoration: BoxDecoration(
@@ -107,6 +114,9 @@ class _NavItem extends StatelessWidget {
             const SizedBox(height: AppSpacing.xxs),
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
               style: AppTypography.labelSmall.copyWith(
                 color: isSelected ? AppColors.primary : AppColors.textTertiary,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,

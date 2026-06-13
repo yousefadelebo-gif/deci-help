@@ -24,7 +24,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Fetch decisions and analytics when screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final decisionProvider = context.read<DecisionProvider>();
-      decisionProvider.fetchDecisions();
+      decisionProvider.fetchRecentDecisions();
       decisionProvider.fetchAnalytics();
     });
   }
@@ -91,20 +91,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
             // Recent Decisions List
             Consumer<DecisionProvider>(
               builder: (context, provider, _) {
-                if (provider.isLoading && provider.decisions.isEmpty) {
+                if (provider.isLoading && provider.recentDecisions.isEmpty) {
                   return const SliverToBoxAdapter(
                     child: Center(child: CircularProgressIndicator()),
                   );
                 }
 
-                if (provider.decisions.isEmpty) {
+                if (provider.error != null && provider.recentDecisions.isEmpty) {
                   return SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.all(AppSpacing.screenPadding),
                       child: Center(
                         child: Column(
                           children: [
-                            Icon(
+                            const Icon(
+                              Icons.cloud_off_rounded,
+                              size: 56,
+                              color: AppColors.textTertiary,
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            Text(
+                              provider.error!,
+                              textAlign: TextAlign.center,
+                              style: AppTypography.bodyMedium.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            TextButton(
+                              onPressed: provider.fetchRecentDecisions,
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
+                if (provider.recentDecisions.isEmpty) {
+                  return SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppSpacing.screenPadding),
+                      child: Center(
+                        child: Column(
+                          children: [
+                            const Icon(
                               Icons.psychology_outlined,
                               size: 64,
                               color: AppColors.textTertiary,
@@ -130,7 +162,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   );
                 }
 
-                final decisions = provider.decisions.take(5).toList();
+                final decisions = provider.recentDecisions.take(5).toList();
                 return SliverPadding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.screenPadding),
@@ -185,14 +217,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: () => MainNavigationScreen.switchToTab(context, 1),
         backgroundColor: AppColors.primary,
         foregroundColor: AppColors.textOnPrimary,
         elevation: 4,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('New Decision'),
+        child: const Icon(Icons.add_rounded),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
@@ -219,6 +251,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Text(
                 'Welcome back, $userName',
                 style: AppTypography.h2,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
@@ -305,6 +339,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.textSecondary,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -337,7 +373,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               children: [
                 Expanded(
                   child: StatsCard(
-                    label: 'Decisions Made',
+                    label: 'Decisions',
                     value: '$totalDecisions',
                     icon: Icons.check_circle_outline_rounded,
                     color: AppColors.primary,
@@ -346,7 +382,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: StatsCard(
-                    label: 'Avg. Confidence',
+                    label: 'Confidence',
                     value: '${avgConfidence.round()}%',
                     icon: Icons.insights_rounded,
                     color: AppColors.secondary,

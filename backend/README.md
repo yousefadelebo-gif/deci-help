@@ -80,10 +80,12 @@ python manage.py createsuperuser
 ### 7. Run Server
 
 ```bash
-python manage.py runserver
+python manage.py runserver 0.0.0.0:8000
 ```
 
-The API will be available at `http://127.0.0.1:8000/api/v1/`
+The API will be available at `http://127.0.0.1:8000/api/v1/` on this machine.
+
+For a physical phone on the same Wi‑Fi, use your PC's LAN IP (e.g. `http://192.168.1.6:8000/api/v1/`) and set `DEV_API_HOST` in the Flutter app if your IP differs.
 
 ## API Endpoints
 

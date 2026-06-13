@@ -212,13 +212,19 @@ class StatsCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          Text(
-            value,
-            style: AppTypography.displaySmall,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: AppTypography.displaySmall,
+            ),
           ),
           const SizedBox(height: AppSpacing.xxs),
           Text(
             label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: AppTypography.bodySmall,
           ),
         ],

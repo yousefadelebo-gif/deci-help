@@ -8,7 +8,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     RegisterView, LoginView, LogoutView, ProfileView,
     ChangePasswordView, UserSettingsView, DeleteAccountView,
-    AdminStatsView, AdminUsersListView
+    AdminStatsView, AdminUsersListView, AdminUserAnalyticsView
 )
 
 urlpatterns = [
@@ -26,5 +26,6 @@ urlpatterns = [
     
     # Admin
     path('admin/stats/', AdminStatsView.as_view(), name='admin_stats'),
+    path('admin/user-analytics/', AdminUserAnalyticsView.as_view(), name='admin_user_analytics'),
     path('admin/users/', AdminUsersListView.as_view(), name='admin_users'),
 ]

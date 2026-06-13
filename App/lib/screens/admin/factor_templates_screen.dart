@@ -2,6 +2,7 @@
 /// Admin view for managing decision factor templates
 
 import 'package:flutter/material.dart';
+import '../../services/api_service.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/custom_app_bar.dart';
 import '../../widgets/app_cards.dart';
@@ -18,111 +19,15 @@ class _FactorTemplatesScreenState extends State<FactorTemplatesScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _searchController = TextEditingController();
-
-  final List<_FactorCategory> _categories = [
-    _FactorCategory(
-      name: 'Career',
-      icon: Icons.work_rounded,
-      color: AppColors.primary,
-      factors: [
-        _FactorTemplate(
-            name: 'Salary', icon: Icons.attach_money_rounded, usageCount: 2847),
-        _FactorTemplate(
-            name: 'Work-Life Balance',
-            icon: Icons.balance_rounded,
-            usageCount: 2341),
-        _FactorTemplate(
-            name: 'Growth Potential',
-            icon: Icons.trending_up_rounded,
-            usageCount: 1923),
-        _FactorTemplate(
-            name: 'Location',
-            icon: Icons.location_on_rounded,
-            usageCount: 1756),
-        _FactorTemplate(
-            name: 'Company Culture',
-            icon: Icons.people_rounded,
-            usageCount: 1542),
-      ],
-    ),
-    _FactorCategory(
-      name: 'Finance',
-      icon: Icons.account_balance_rounded,
-      color: AppColors.success,
-      factors: [
-        _FactorTemplate(
-            name: 'Return on Investment',
-            icon: Icons.show_chart_rounded,
-            usageCount: 1876),
-        _FactorTemplate(
-            name: 'Risk Level', icon: Icons.warning_rounded, usageCount: 1654),
-        _FactorTemplate(
-            name: 'Liquidity', icon: Icons.water_drop_rounded, usageCount: 987),
-        _FactorTemplate(
-            name: 'Time Horizon',
-            icon: Icons.schedule_rounded,
-            usageCount: 876),
-      ],
-    ),
-    _FactorCategory(
-      name: 'Health',
-      icon: Icons.favorite_rounded,
-      color: AppColors.error,
-      factors: [
-        _FactorTemplate(
-            name: 'Physical Health Impact',
-            icon: Icons.fitness_center_rounded,
-            usageCount: 1234),
-        _FactorTemplate(
-            name: 'Mental Well-being',
-            icon: Icons.psychology_rounded,
-            usageCount: 1198),
-        _FactorTemplate(
-            name: 'Long-term Effects',
-            icon: Icons.timeline_rounded,
-            usageCount: 876),
-      ],
-    ),
-    _FactorCategory(
-      name: 'Relationships',
-      icon: Icons.people_rounded,
-      color: AppColors.secondary,
-      factors: [
-        _FactorTemplate(
-            name: 'Family Impact',
-            icon: Icons.family_restroom_rounded,
-            usageCount: 1543),
-        _FactorTemplate(
-            name: 'Social Circle', icon: Icons.groups_rounded, usageCount: 987),
-        _FactorTemplate(
-            name: 'Partner Preferences',
-            icon: Icons.favorite_border_rounded,
-            usageCount: 765),
-      ],
-    ),
-    _FactorCategory(
-      name: 'Education',
-      icon: Icons.school_rounded,
-      color: AppColors.info,
-      factors: [
-        _FactorTemplate(
-            name: 'Learning Opportunity',
-            icon: Icons.auto_stories_rounded,
-            usageCount: 1234),
-        _FactorTemplate(
-            name: 'Accreditation',
-            icon: Icons.verified_rounded,
-            usageCount: 876),
-        _FactorTemplate(
-            name: 'Cost', icon: Icons.payments_rounded, usageCount: 2341),
-      ],
-    ),
-  ];
+  bool _isLoading = true;
+  String? _error;
+  List<_FactorCategory> _categories = [];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _categories.length, vsync: this);
+    _tabController = TabController(length: 1, vsync: this);
+    _loadCategories();
   }
 
   @override
@@ -130,6 +35,44 @@ class _FactorTemplatesScreenState extends State<FactorTemplatesScreen>
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadCategories() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    final response = await ApiService.getFactorCategories();
+    if (!mounted) return;
+
+    if (!response.isSuccess) {
+      setState(() {
+        _error = response.error ?? 'Failed to load factor templates';
+        _isLoading = false;
+      });
+      return;
+    }
+
+    final raw = response.data;
+    final items = raw is List ? raw : List<dynamic>.from(raw['results'] ?? []);
+    final categories = items
+        .whereType<Map>()
+        .map((item) => _FactorCategory.fromJson(
+              Map<String, dynamic>.from(item),
+            ))
+        .toList();
+
+    if (!mounted) return;
+    _tabController.dispose();
+    _tabController = TabController(
+      length: categories.isEmpty ? 1 : categories.length,
+      vsync: this,
+    );
+    setState(() {
+      _categories = categories;
+      _isLoading = false;
+    });
   }
 
   @override
@@ -141,12 +84,16 @@ class _FactorTemplatesScreenState extends State<FactorTemplatesScreen>
         showBackButton: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.add_rounded),
-            onPressed: () => _showAddCategoryDialog(),
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: _loadCategories,
           ),
         ],
       ),
-      body: Column(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? _buildErrorState()
+              : Column(
         children: [
           // Search Bar
           Container(
@@ -185,7 +132,13 @@ class _FactorTemplatesScreenState extends State<FactorTemplatesScreen>
                 Expanded(
                   child: _buildStatCard(
                     'Total Usage',
-                    '28.4K',
+                    _formatNumber(_categories.fold<int>(
+                      0,
+                      (sum, c) => sum + c.factors.fold<int>(
+                        0,
+                        (factorSum, f) => factorSum + f.usageCount,
+                      ),
+                    )),
                     Icons.analytics_rounded,
                     AppColors.success,
                   ),
@@ -203,7 +156,9 @@ class _FactorTemplatesScreenState extends State<FactorTemplatesScreen>
               labelColor: AppColors.primary,
               unselectedLabelColor: AppColors.textSecondary,
               indicatorColor: AppColors.primary,
-              tabs: _categories.map((category) {
+              tabs: (_categories.isEmpty
+                  ? [_FactorCategory.empty()]
+                  : _categories).map((category) {
                 return Tab(
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -222,19 +177,33 @@ class _FactorTemplatesScreenState extends State<FactorTemplatesScreen>
           Expanded(
             child: TabBarView(
               controller: _tabController,
-              children: _categories.map((category) {
+              children: (_categories.isEmpty
+                  ? [_FactorCategory.empty()]
+                  : _categories).map((category) {
                 return _buildFactorList(category);
               }).toList(),
             ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddFactorDialog(),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Add Factor'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.screenPadding),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_error!, textAlign: TextAlign.center),
+            const SizedBox(height: AppSpacing.md),
+            ElevatedButton(
+              onPressed: _loadCategories,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -261,11 +230,18 @@ class _FactorTemplatesScreenState extends State<FactorTemplatesScreen>
   }
 
   Widget _buildFactorList(_FactorCategory category) {
+    final query = _searchController.text.trim().toLowerCase();
+    final factors = category.factors
+        .where((factor) => query.isEmpty || factor.name.toLowerCase().contains(query))
+        .toList();
+    if (factors.isEmpty) {
+      return const Center(child: Text('No factor templates found'));
+    }
     return ListView.builder(
       padding: const EdgeInsets.all(AppSpacing.screenPadding),
-      itemCount: category.factors.length,
+      itemCount: factors.length,
       itemBuilder: (context, index) {
-        final factor = category.factors[index];
+        final factor = factors[index];
         return _buildFactorCard(factor, category.color);
       },
     );
@@ -312,21 +288,8 @@ class _FactorTemplatesScreenState extends State<FactorTemplatesScreen>
                 ],
               ),
             ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.edit_rounded, size: 20),
-                  color: AppColors.textSecondary,
-                  onPressed: () => _showEditFactorDialog(factor),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline_rounded, size: 20),
-                  color: AppColors.error,
-                  onPressed: () => _showDeleteConfirmation(factor),
-                ),
-              ],
-            ),
+            const Icon(Icons.chevron_right_rounded,
+                color: AppColors.textTertiary),
           ],
         ),
       ),
@@ -340,264 +303,6 @@ class _FactorTemplatesScreenState extends State<FactorTemplatesScreen>
     return number.toString();
   }
 
-  void _showAddCategoryDialog() {
-    final nameController = TextEditingController();
-    IconData selectedIcon = Icons.category_rounded;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Category'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppTextField(
-              controller: nameController,
-              label: 'Category Name',
-              hint: 'Enter category name',
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text('Select Icon', style: AppTypography.labelMedium),
-            const SizedBox(height: AppSpacing.sm),
-            Wrap(
-              spacing: AppSpacing.xs,
-              runSpacing: AppSpacing.xs,
-              children: [
-                Icons.work_rounded,
-                Icons.account_balance_rounded,
-                Icons.favorite_rounded,
-                Icons.school_rounded,
-                Icons.home_rounded,
-                Icons.flight_rounded,
-                Icons.restaurant_rounded,
-                Icons.sports_esports_rounded,
-              ].map((icon) {
-                return InkWell(
-                  onTap: () {
-                    selectedIcon = icon;
-                    (context as Element).markNeedsBuild();
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(AppSpacing.sm),
-                    decoration: BoxDecoration(
-                      color: selectedIcon == icon
-                          ? AppColors.primarySurface
-                          : AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                    ),
-                    child: Icon(
-                      icon,
-                      color: selectedIcon == icon
-                          ? AppColors.primary
-                          : AppColors.textSecondary,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final name = nameController.text.trim();
-              if (name.isEmpty) return;
-              setState(() {
-                _categories.add(
-                  _FactorCategory(
-                    name: name,
-                    icon: selectedIcon,
-                    color: AppColors.primary,
-                    factors: [],
-                  ),
-                );
-              });
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Category "$name" added')),
-              );
-            },
-            child: const Text('Add'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAddFactorDialog() {
-    final nameController = TextEditingController();
-    final descriptionController = TextEditingController();
-    // ignore: unused_local_variable
-    String? selectedCategory;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Factor'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AppTextField(
-                controller: nameController,
-                label: 'Factor Name',
-                hint: 'Enter factor name',
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                controller: descriptionController,
-                label: 'Description',
-                hint: 'Enter factor description',
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text('Category', style: AppTypography.labelMedium),
-              const SizedBox(height: AppSpacing.xs),
-              DropdownButtonFormField<String>(
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                  ),
-                ),
-                hint: const Text('Select category'),
-                items: _categories.map((cat) {
-                  return DropdownMenuItem(
-                    value: cat.name,
-                    child: Row(
-                      children: [
-                        Icon(cat.icon, size: 18, color: cat.color),
-                        const SizedBox(width: AppSpacing.sm),
-                        Text(cat.name),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                onChanged: (value) => selectedCategory = value,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final name = nameController.text.trim();
-              if (name.isEmpty || selectedCategory == null) return;
-              setState(() {
-                final category = _categories.firstWhere(
-                  (c) => c.name == selectedCategory,
-                );
-                category.factors.add(
-                  _FactorTemplate(
-                    name: name,
-                    icon: Icons.label_outline_rounded,
-                    usageCount: 0,
-                  ),
-                );
-              });
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Factor "$name" added')),
-              );
-            },
-            child: const Text('Add'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showEditFactorDialog(_FactorTemplate factor) {
-    final nameController = TextEditingController(text: factor.name);
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit Factor'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppTextField(
-              controller: nameController,
-              label: 'Factor Name',
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final name = nameController.text.trim();
-              if (name.isEmpty) return;
-              setState(() {
-                for (final category in _categories) {
-                  final index = category.factors.indexOf(factor);
-                  if (index != -1) {
-                    category.factors[index] = _FactorTemplate(
-                      name: name,
-                      icon: factor.icon,
-                      usageCount: factor.usageCount,
-                    );
-                  }
-                }
-              });
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Factor updated')),
-              );
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showDeleteConfirmation(_FactorTemplate factor) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Factor?'),
-        content: Text(
-          'Are you sure you want to delete "${factor.name}"? This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                for (final category in _categories) {
-                  category.factors.remove(factor);
-                }
-              });
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('"${factor.name}" deleted')),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _FactorCategory {
@@ -612,6 +317,63 @@ class _FactorCategory {
     required this.color,
     required this.factors,
   });
+
+  factory _FactorCategory.fromJson(Map<String, dynamic> json) {
+    final name = json['name']?.toString() ?? 'Category';
+    return _FactorCategory(
+      name: name,
+      icon: _iconForName(name),
+      color: _colorForName(name),
+      factors: List<Map<String, dynamic>>.from(json['templates'] ?? [])
+          .map(_FactorTemplate.fromJson)
+          .toList(),
+    );
+  }
+
+  factory _FactorCategory.empty() {
+    return _FactorCategory(
+      name: 'No Categories',
+      icon: Icons.category_rounded,
+      color: AppColors.textTertiary,
+      factors: [],
+    );
+  }
+
+  static IconData _iconForName(String name) {
+    switch (name.toLowerCase()) {
+      case 'career':
+        return Icons.work_rounded;
+      case 'finance':
+        return Icons.account_balance_rounded;
+      case 'health':
+        return Icons.favorite_rounded;
+      case 'relationships':
+      case 'relationship':
+        return Icons.people_rounded;
+      case 'education':
+        return Icons.school_rounded;
+      default:
+        return Icons.category_rounded;
+    }
+  }
+
+  static Color _colorForName(String name) {
+    switch (name.toLowerCase()) {
+      case 'career':
+        return AppColors.primary;
+      case 'finance':
+        return AppColors.success;
+      case 'health':
+        return AppColors.error;
+      case 'relationships':
+      case 'relationship':
+        return AppColors.secondary;
+      case 'education':
+        return AppColors.info;
+      default:
+        return AppColors.accent;
+    }
+  }
 }
 
 class _FactorTemplate {
@@ -624,4 +386,25 @@ class _FactorTemplate {
     required this.icon,
     required this.usageCount,
   });
+
+  factory _FactorTemplate.fromJson(Map<String, dynamic> json) {
+    final name = json['name']?.toString() ?? 'Factor';
+    return _FactorTemplate(
+      name: name,
+      icon: _iconForName(name),
+      usageCount: (json['usage_count'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  static IconData _iconForName(String name) {
+    final lower = name.toLowerCase();
+    if (lower.contains('cost') || lower.contains('salary')) {
+      return Icons.attach_money_rounded;
+    }
+    if (lower.contains('risk')) return Icons.warning_rounded;
+    if (lower.contains('time')) return Icons.schedule_rounded;
+    if (lower.contains('growth')) return Icons.trending_up_rounded;
+    if (lower.contains('location')) return Icons.location_on_rounded;
+    return Icons.label_outline_rounded;
+  }
 }

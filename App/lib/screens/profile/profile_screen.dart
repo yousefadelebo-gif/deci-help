@@ -182,10 +182,10 @@ class ProfileScreen extends StatelessWidget {
               Consumer<DecisionProvider>(
                 builder: (context, provider, _) {
                   final analytics = provider.analytics;
-                  final totalDecisions = analytics?['total_decisions'] ?? 12;
-                  final avgConfidence = analytics?['average_confidence'] ?? 85;
+                  final totalDecisions = analytics?['total_decisions'] ?? 0;
+                  final avgConfidence = analytics?['average_confidence'] ?? 0;
                   final avgSatisfaction =
-                      analytics?['average_satisfaction'] ?? 4.5;
+                      analytics?['average_satisfaction'] ?? 0.0;
 
                   return Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,

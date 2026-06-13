@@ -338,4 +338,11 @@ class RecentDecisionsView(generics.ListAPIView):
     def get_queryset(self):
         return Decision.objects.filter(
             user=self.request.user
+        ).select_related(
+            'chosen_option',
+            'ai_recommendation',
+        ).prefetch_related(
+            Prefetch('options'),
+            Prefetch('decision_factors'),
+            Prefetch('journal_entry'),
         ).order_by('-created_at')[:5]

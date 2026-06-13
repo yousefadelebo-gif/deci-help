@@ -5,12 +5,14 @@ import '../services/api_service.dart';
 class DecisionProvider extends ChangeNotifier {
   bool _isLoading = false;
   List<Map<String, dynamic>> _decisions = [];
+  List<Map<String, dynamic>> _recentDecisions = [];
   Map<String, dynamic>? _currentDecision;
   Map<String, dynamic>? _analytics;
   String? _error;
 
   bool get isLoading => _isLoading;
   List<Map<String, dynamic>> get decisions => _decisions;
+  List<Map<String, dynamic>> get recentDecisions => _recentDecisions;
   Map<String, dynamic>? get currentDecision => _currentDecision;
   Map<String, dynamic>? get analytics => _analytics;
   String? get error => _error;
@@ -34,13 +36,28 @@ class DecisionProvider extends ChangeNotifier {
     _isLoading = false;
 
     if (response.isSuccess) {
-      _decisions = List<Map<String, dynamic>>.from(
-          response.data['results'] ?? response.data);
+      _decisions = _parseListResponse(response.data);
       notifyListeners();
     } else {
       _error = response.error;
       notifyListeners();
     }
+  }
+
+  Future<void> fetchRecentDecisions() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    final response = await ApiService.getRecentDecisions();
+
+    _isLoading = false;
+    if (response.isSuccess) {
+      _recentDecisions = _parseListResponse(response.data);
+    } else {
+      _error = response.error;
+    }
+    notifyListeners();
   }
 
   // Fetch single decision
@@ -75,6 +92,10 @@ class DecisionProvider extends ChangeNotifier {
     if (response.isSuccess) {
       final newDecision = Map<String, dynamic>.from(response.data);
       _decisions.insert(0, newDecision);
+      _recentDecisions.insert(0, newDecision);
+      if (_recentDecisions.length > 5) {
+        _recentDecisions = _recentDecisions.take(5).toList();
+      }
       _currentDecision = newDecision;
       notifyListeners();
       return newDecision['id'];
@@ -101,6 +122,10 @@ class DecisionProvider extends ChangeNotifier {
       if (index != -1) {
         _decisions[index] = updated;
       }
+      final recentIndex = _recentDecisions.indexWhere((d) => d['id'] == id);
+      if (recentIndex != -1) {
+        _recentDecisions[recentIndex] = updated;
+      }
       if (_currentDecision?['id'] == id) {
         _currentDecision = updated;
       }
@@ -125,6 +150,7 @@ class DecisionProvider extends ChangeNotifier {
 
     if (response.isSuccess) {
       _decisions.removeWhere((d) => d['id'] == id);
+      _recentDecisions.removeWhere((d) => d['id'] == id);
       if (_currentDecision?['id'] == id) {
         _currentDecision = null;
       }
@@ -201,6 +227,11 @@ class DecisionProvider extends ChangeNotifier {
       final index = _decisions.indexWhere((d) => d['id'] == decisionId);
       if (index != -1) {
         _decisions[index]['status'] = 'completed';
+      }
+      final recentIndex =
+          _recentDecisions.indexWhere((d) => d['id'] == decisionId);
+      if (recentIndex != -1) {
+        _recentDecisions[recentIndex]['status'] = 'completed';
       }
       notifyListeners();
       return true;
@@ -282,5 +313,16 @@ class DecisionProvider extends ChangeNotifier {
   void clearError() {
     _error = null;
     notifyListeners();
+  }
+
+  List<Map<String, dynamic>> _parseListResponse(dynamic data) {
+    final rawItems = data is Map
+        ? data['results']
+        : data;
+    if (rawItems is! List) return [];
+    return rawItems
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
   }
 }

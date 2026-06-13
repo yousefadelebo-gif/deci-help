@@ -216,10 +216,10 @@ class _OverviewTabState extends State<_OverviewTab> {
 
     final totalUsers = _stats['total_users'] ?? 0;
     final activeToday = _stats['active_today'] ?? 0;
-    final userGrowth = _stats['user_growth'] ?? 0.0;
+    final userGrowth = _asDouble(_stats['user_growth']);
     final totalDecisions = _stats['total_decisions'] ?? 0;
-    final decisionGrowth = _stats['decision_growth'] ?? 0.0;
-    final avgRating = _stats['avg_rating'] ?? 0.0;
+    final decisionGrowth = _asDouble(_stats['decision_growth']);
+    final avgRating = _asDouble(_stats['avg_rating']);
     final weeklyActivity =
         List<Map<String, dynamic>>.from(_stats['weekly_activity'] ?? []);
     final decisionCategories =
@@ -248,7 +248,7 @@ class _OverviewTabState extends State<_OverviewTab> {
                 child: _buildStatCard(
                   _formatNumber(activeToday),
                   'Active Today',
-                  '+${(activeToday > 0 ? 8 : 0)}%',
+                  '',
                   Icons.trending_up_rounded,
                   const Color(0xFF10B981),
                   const Color(0xFFD1FAE5),
@@ -274,7 +274,7 @@ class _OverviewTabState extends State<_OverviewTab> {
                 child: _buildStatCard(
                   '${avgRating.toStringAsFixed(1)}/5',
                   'Avg Rating',
-                  '+0.3',
+                  '',
                   Icons.chat_bubble_rounded,
                   const Color(0xFFF97316),
                   const Color(0xFFFED7AA),
@@ -497,7 +497,7 @@ class _OverviewTabState extends State<_OverviewTab> {
     return categories.asMap().entries.map((entry) {
       final index = entry.key;
       final category = entry.value;
-      final percentage = (category['percentage'] ?? 0).toDouble();
+      final percentage = _asDouble(category['percentage']);
 
       return PieChartSectionData(
         color: colors[index % colors.length],
@@ -573,7 +573,7 @@ class _OverviewTabState extends State<_OverviewTab> {
     return weeklyActivity.asMap().entries.map((entry) {
       return FlSpot(
         entry.key.toDouble(),
-        (entry.value['count'] ?? 0).toDouble(),
+        _asDouble(entry.value['count']),
       );
     }).toList();
   }
@@ -583,10 +583,16 @@ class _OverviewTabState extends State<_OverviewTab> {
 
     double maxValue = 0;
     for (var item in weeklyActivity) {
-      final count = (item['count'] ?? 0).toDouble();
+      final count = _asDouble(item['count']);
       if (count > maxValue) maxValue = count;
     }
     return maxValue + 10;
+  }
+
+  double _asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
   }
 
   Widget _buildStatCard(
@@ -1065,8 +1071,8 @@ class _FeedbackTabState extends State<_FeedbackTab> {
     }
 
     final totalFeedback = _stats['total_count'] ?? _feedbacks.length;
-    final avgRating = _stats['average_rating'] ?? 4.5;
-    final positivePercent = _stats['positive_percentage'] ?? 94;
+    final avgRating = _stats['average_rating'] ?? 0.0;
+    final positivePercent = _stats['positive_percentage'] ?? 0;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppSpacing.screenPadding),
@@ -1235,22 +1241,48 @@ class _SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<_SettingsTab> {
-  double _confidenceThreshold = 75;
-  String _maxFactors = '6';
-  String _aiModelVersion = 'v2.0 (Latest)';
   bool _emailNotifications = true;
   bool _autoBackup = true;
   bool _analyticsTracking = false;
+  bool _isLoading = true;
+  Map<String, dynamic> _aiStatus = {};
+  Map<String, dynamic> _stats = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettingsData();
+  }
+
+  Future<void> _loadSettingsData() async {
+    final responses = await Future.wait([
+      ApiService.checkAIStatus(),
+      ApiService.getAdminStats(),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      if (responses.first.isSuccess) {
+        _aiStatus = Map<String, dynamic>.from(responses.first.data);
+      }
+      if (responses.last.isSuccess) {
+        _stats = Map<String, dynamic>.from(responses.last.data);
+      }
+      _isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppSpacing.screenPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // AI Parameters Section
-          const Text('AI Parameters', style: AppTypography.h4),
+          const Text('AI Status', style: AppTypography.h4),
           const SizedBox(height: AppSpacing.sm),
           Container(
             padding: const EdgeInsets.all(AppSpacing.md),
@@ -1268,92 +1300,16 @@ class _SettingsTabState extends State<_SettingsTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Confidence Threshold Slider
-                const Text('Confidence Threshold',
-                    style: AppTypography.labelMedium),
-                const SizedBox(height: AppSpacing.sm),
-                SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    activeTrackColor: const Color(0xFF0D9488),
-                    inactiveTrackColor: const Color(0xFFE2E8F0),
-                    thumbColor: const Color(0xFF0D9488),
-                    overlayColor: const Color(0xFF0D9488).withOpacity(0.2),
-                  ),
-                  child: Slider(
-                    value: _confidenceThreshold,
-                    min: 50,
-                    max: 100,
-                    divisions: 10,
-                    onChanged: (value) {
-                      setState(() {
-                        _confidenceThreshold = value;
-                      });
-                    },
-                  ),
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('50%', style: AppTypography.caption),
-                    Text('${_confidenceThreshold.round()}%',
-                        style: AppTypography.labelMedium),
-                    Text('100%', style: AppTypography.caption),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.lg),
-
-                // Max Suggested Factors Dropdown
-                const Text('Max Suggested Factors',
-                    style: AppTypography.labelMedium),
-                const SizedBox(height: AppSpacing.sm),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.border),
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                  ),
-                  child: DropdownButton<String>(
-                    value: _maxFactors,
-                    isExpanded: true,
-                    underline: const SizedBox(),
-                    items: ['3', '4', '5', '6', '8', '10'].map((value) {
-                      return DropdownMenuItem(value: value, child: Text(value));
-                    }).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _maxFactors = value);
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-
-                // AI Model Version Dropdown
-                const Text('AI Model Version',
-                    style: AppTypography.labelMedium),
-                const SizedBox(height: AppSpacing.sm),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.border),
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                  ),
-                  child: DropdownButton<String>(
-                    value: _aiModelVersion,
-                    isExpanded: true,
-                    underline: const SizedBox(),
-                    items: ['v2.0 (Latest)', 'v1.5 (Stable)', 'v1.0 (Legacy)']
-                        .map((value) {
-                      return DropdownMenuItem(value: value, child: Text(value));
-                    }).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _aiModelVersion = value);
-                      }
-                    },
-                  ),
+                _buildStatusRow('Availability',
+                    _aiStatus['available'] == true ? 'Available' : 'Unavailable'),
+                const Divider(height: AppSpacing.lg),
+                _buildStatusRow('Model', _aiStatus['model']?.toString() ?? 'None'),
+                const Divider(height: AppSpacing.lg),
+                _buildStatusRow('AI Analyses', '${_stats['ai_analyses'] ?? 0}'),
+                const Divider(height: AppSpacing.lg),
+                _buildStatusRow(
+                  'AI Success Rate',
+                  '${_asDouble(_stats['ai_success_rate']).toStringAsFixed(1)}%',
                 ),
               ],
             ),
@@ -1405,7 +1361,6 @@ class _SettingsTabState extends State<_SettingsTab> {
             child: ElevatedButton(
               onPressed: () async {
                 final prefs = await SharedPreferences.getInstance();
-                await prefs.setString('admin_ai_model', _aiModelVersion);
                 await prefs.setBool('admin_email_notifications', _emailNotifications);
                 await prefs.setBool('admin_auto_backup', _autoBackup);
                 await prefs.setBool('admin_analytics_tracking', _analyticsTracking);
@@ -1456,5 +1411,30 @@ class _SettingsTabState extends State<_SettingsTab> {
         ],
       ),
     );
+  }
+
+  Widget _buildStatusRow(String label, String value) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(label, style: AppTypography.bodyLarge),
+        ),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: AppTypography.labelLarge.copyWith(
+              color: AppColors.primary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  double _asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
   }
 }

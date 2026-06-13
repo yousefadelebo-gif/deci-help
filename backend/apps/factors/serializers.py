@@ -40,13 +40,20 @@ class FactorCategoryListSerializer(serializers.ModelSerializer):
     """Lighter serializer for listing categories"""
     
     templates_count = serializers.SerializerMethodField()
+    templates = serializers.SerializerMethodField()
     
     class Meta:
         model = FactorCategory
-        fields = ['id', 'name', 'description', 'icon', 'color', 'order', 'templates_count']
+        fields = ['id', 'name', 'description', 'icon', 'color', 'order', 'templates_count', 'templates']
     
     def get_templates_count(self, obj):
         return obj.templates.filter(is_active=True).count()
+
+    def get_templates(self, obj):
+        templates = getattr(obj, 'active_templates', None)
+        if templates is None:
+            templates = obj.templates.filter(is_active=True)
+        return FactorTemplateSerializer(templates, many=True).data
 
 
 class UserFactorTemplateSerializer(serializers.ModelSerializer):
